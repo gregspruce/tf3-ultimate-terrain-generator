@@ -2,6 +2,10 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/). Last Updated: 2026-10-09 (update prep: revision 2, shipped docs reviewed).
 
+## [Released] revision 2 - 2026-10-09 - mod.io 6433560
+- Uploaded to mod.io (mod file checked against the download); release tag `utg-r2`; public repository
+  `tf3-ultimate-terrain-generator` (release r2, docs corrected the same day).
+
 ## [Unreleased] - 2026-10-09 - update prep (revision 2)
 - Gallery (author): 1-8.png resized to 1920x1080 (1.7-3.5 MB each; originals in
   a backup, not shipped). publish_check: gallery images 1920x1080 and <= 8 MB too (FAIL).
