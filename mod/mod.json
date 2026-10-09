@@ -1,0 +1,23 @@
+{
+    "modId": "ultimate_terrain_generator",
+    "revision": 2,
+    "severityAdd": "None",
+    "severityRemove": "Warning",
+    "visible": true,
+    "cosmetic": false,
+    "params": [
+        {
+            "key": "utg_debug_tools",
+            "name": "Debug tools",
+            "tooltip": "Shows the Debug row in the window: Export, Test set, Run test and Save log. For testing and bug reports; leave Off otherwise.",
+            "uiType": "Button",
+            "values": [
+                "Off",
+                "On"
+            ],
+            "defaultIndex": 0,
+            "yearFrom": 0,
+            "yearTo": 0
+        }
+    ]
+}

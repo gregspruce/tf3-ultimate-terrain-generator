@@ -1,0 +1,18 @@
+{
+    "authors": [
+        {
+            "name": "TangoEchoXray",
+            "role": "CREATOR"
+        }
+    ],
+    "description": "Map editor tool with its own window: build whole maps from the rivers up (ship rivers, lakes, eroded hills and mountains, ten map types) or run any other terrain generator of your climate, with preview only when you ask. Full maps with forests for Temperate; other climates get the terrain shape.",
+    "name": "Ultimate Terrain Generator",
+    "summary": "Map editor window: rivers-first terrain, ten map types, any generator, preview on request.",
+    "tags": [
+        "Temperate",
+        "Subarctic",
+        "Dry",
+        "Tropical"
+    ],
+    "url": ""
+}
