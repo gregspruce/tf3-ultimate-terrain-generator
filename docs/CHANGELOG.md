@@ -173,7 +173,7 @@ finish and exports the logs/heightmaps")
 ### Fixed (author's second look, log + screenshot, 5120 x 1440)
 - **The width caps did nothing in game** (the window ignored `maxSize`, still ~4300 px wide) and `initialX = 0.5` left
   the window at the screen's left edge under the game's tool strip. Now: the stylesheet reads the screen size
-  (`api.util.getGraphicsPresetParam.screenExtent`, new with the game update) when it loads and makes the window
+  (`api.util.getGraphicsPresetParam().screenExtent`, new with the game update) when it loads and makes the window
   "settings column + square preview" wide (5120 x 1440 -> 36vw; 1920 x 1080 -> 80vw; 3840 x 2160 -> 62vw; per text
   size; never above 84vw / Larger 96vw), and places it like the base Statistics window (centred, 64 px above the game
   bar, not movable). Without a screen size: the old shares.
@@ -547,7 +547,7 @@ Measured against a vanilla Temperate map of the same seed (new `tools/scale_chec
   ragged mainland coast), **Island Chain** (4-7 islands of 2-4 lobes each along a curve; low hills; short streams),
   **Coastal Region** (ragged coast with headlands and coves; a river from the hinterland, a ship river by default),
   **Highland Plateau** (coastal lowland, wavy escarpment, a raised flat plateau cut by river gorges).
-- `shapes.build` two-pass mode for types with `sea` + `land`: land is shaped from the true distance to the open
+- `shapes.build` two-pass mode for types with `sea()` + `land()`: land is shaped from the true distance to the open
   sea (`grid.nearestSeed`); sea slivers one cell wide are removed (`removeSeaSlivers`; they left sub-zero specks
   along ragged shores) and closed sea patches become land (`openSeaOnly`).
 - Raised ground: two-pass types may return a lift; landform adds `LIFT x target x preset.lift` before the slope limit,

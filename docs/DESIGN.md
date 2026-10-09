@@ -279,12 +279,12 @@ Window (TGW, on hold; section 12). The plan below works for both; where it lives
 ### 15.1 What the game files give us (verified in files, `base/content/gui/`)
 | Need | Base game mechanism | Source |
 |---|---|---|
-| List the generators of this climate, in order | `app.res.terrainGeneratorRep.getAll`, `get(k)` (desc: `climate`, `visible`, `isImportGenerator`, `order`, `params`, `desc.name`), `getName(k)`; filter `gen.climate == baseConfig.climate and gen.visible` (+ not import for the generate tab), sort by `order` | `map_editor/map_editor.tl:509-527` (`getPossibleGenerators`) |
+| List the generators of this climate, in order | `app.res.terrainGeneratorRep.getAll()`, `get(k)` (desc: `climate`, `visible`, `isImportGenerator`, `order`, `params`, `desc.name`), `getName(k)`; filter `gen.climate == baseConfig.climate and gen.visible` (+ not import for the generate tab), sort by `order` | `map_editor/map_editor.tl:509-527` (`getPossibleGenerators`) |
 | Default parameter values | `script_param_util.getScriptParamDefaultValueIndex(param.numbers, param.defaultIndex)`; existing values clamped with `clampScriptParamValueIndex` | `map_editor.tl:529-539` (`addMissingGeneratorParams`) |
 | A widget for every parameter type (combo, slider, check box, buttons, toggle buttons) | `script_param_util.buildScriptParamComp(scriptParam, index, onValueChange)` (label + control in the base "script-param-wrap" layout) | `main/script_param_util.tl:546-570`; used `map_editor.tl:655, 677` |
-| Generator choice as a combo | a `api.type.ScriptParam.new` with `key = "generator"`, `uiType = ComboBox`, `values` = `gen.desc.name` | `map_editor.tl:640-670` |
+| Generator choice as a combo | a `api.type.ScriptParam.new()` with `key = "generator"`, `uiType = ComboBox`, `values` = `gen.desc.name` | `map_editor.tl:640-670` |
 | Preview inputs | `HeighmapGenerationMode` (`terrainGenerator`, `generateTowns/Industries = false`, `generateAssets`, `keepHeightmap`, `keepBiomes`), `inputMap = makeMapFromGame(withHeightmap, withTowns, withIndustries, withAssets)` with `waterLevel = 0`, `params` = { key = 1-based value INDEX }, `seed` string | `map_editor.tl:541-556, 584-592, 298-330, 2670-2685` |
-| Apply | remove towns (`makeTownDestroyCmd`) and industries (`industry_util.removeIndustries`) unless "Keep towns / Keep industries", then `makeWorldReplaceTerrainCmd(Map.new(readyMap), baseConfig.terrain, seed, world, keepAssets)`, `setMapSeedText(seed)`, `reloadMaterialIndexManagerPipeline` | `map_editor.tl:749-830` |
+| Apply | remove towns (`makeTownDestroyCmd`) and industries (`industry_util.removeIndustries`) unless "Keep towns / Keep industries", then `makeWorldReplaceTerrainCmd(Map.new(readyMap), baseConfig.terrain, seed, world, keepAssets)`, `setMapSeedText(seed)`, `reloadMaterialIndexManagerPipeline()` | `map_editor.tl:749-830` |
 The base window re-runs the preview on EVERY change (its `MapPreviewComp` inputs change with each parameter). Our
 window already proves the on-demand alternative: the preview's inputs change only when Preview is pressed (runs 1-6).
 Import-style generators need `keepHeightmap = true` (without it the game crashed, probe run 2) and an imported file;
@@ -339,7 +339,7 @@ engine source is new (~250 lines). The core (`pipeline.lua`) stays untouched (se
 Estimated size: 1 session to build and check offline, 1 in-game run.
 
 ### 15.5 As built (2026-10-08 afternoon; offline-checked, not yet seen in game)
-- `content/scripts/ultimate_terrain_generator/studio/engine_generators.lua` (engine-facing, not core): `list`,
+- `content/scripts/ultimate_terrain_generator/studio/engine_generators.lua` (engine-facing, not core): `list()`,
   parameter values (`valueOf` / `indexOf` / `defaultValue`, the base rules), `makeRequest` (keepHeightmap off, inputs as
   the base `makeMap`), `removeTownsAndIndustries` (base order; industries counted by the constructions found; proposals
   not player-initiated), `measure` (land, slope classes, heights of a finished map, the UTG report's definitions).
