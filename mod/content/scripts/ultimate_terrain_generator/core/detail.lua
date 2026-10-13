@@ -193,8 +193,11 @@ function M.upsample(hc, g, Wf, Hf, kind, settings, preset, seed, ctx, rough)
 end
 
 -- Carve the river courses. Points closer than a width-dependent step are skipped (the chord error of the
--- meander curves stays under a metre), so wide rivers cost little.
+-- meander curves stays under a metre), so wide rivers cost little. A path may allow a longer step (p.step, up to 0.6 x
+-- its width: Sea Strait's shipping lane, hundreds of metres wide and gently curved). The frame budget is ticked by the work done (cells
+-- visited), not every 64 segments: the lane's wide segments held the Studio window for 64-100 ms (review round 3).
 function M.carve(H, Wf, Hf, paths, ctx)
+	local work = 0
 	for _, p in ipairs(paths) do
 		local x, y, wd, fp = p.x, p.y, p.w, p.fp
 		local n = #x
@@ -214,13 +217,13 @@ function M.carve(H, Wf, Hf, paths, ctx)
 		for i = 2, n do
 			local dx, dy = x[i] - x[i - 1], y[i] - y[i - 1]
 			acc = acc + sqrt(dx * dx + dy * dy)
-			if acc >= max(8, min(40, wd[i] * 0.25)) or i == n then
+			if acc >= max(8, min(p.step or 40, wd[i] * (p.step and 0.6 or 0.25))) or i == n then
 				sel[#sel + 1] = i
 				acc = 0
 			end
 		end
 		for s = 1, #sel - 1 do
-			if ctx and s % 64 == 0 then ctx.tick() end
+			if ctx and work > 120000 then ctx.tick(); work = 0 end
 			local a, b = sel[s], sel[s + 1]
 			local ax, ay, bx, by = x[a], y[a], x[b], y[b]
 			local wa, wb, da, db = wd[a], wd[b], dp[a], dp[b]
@@ -229,6 +232,7 @@ function M.carve(H, Wf, Hf, paths, ctx)
 			local i1 = min(Wf - 1, ceil((max(ax, bx) + reach) / 4))
 			local j0 = max(0, floor((min(ay, by) - reach) / 4))
 			local j1 = min(Hf - 1, ceil((max(ay, by) + reach) / 4))
+			work = work + (i1 - i0 + 1) * (j1 - j0 + 1)
 			local vx, vy = bx - ax, by - ay
 			local L2 = vx * vx + vy * vy
 			if L2 < 1e-9 then L2 = 1e-9 end

@@ -8,8 +8,9 @@ WHY
 
 HOW
   The map type draws each pass as a winding valley axis from the foot of the range on one side to the foot on the
-  other (shapes.lua; its drainage notch follows the same axis). M.profile samples the terrain along the axis and
-  limits it to grade G in both directions: the lower envelope z(s) = min over s' of h(s') + G * |s - s'|. That
+  other (shapes.lua; its drainage notch follows the same axis). M.profile samples the terrain along the axis (the
+  lowest ground across the floor's width) and limits it to grade G in both directions: the lower envelope
+  z(s) = min over s' of h(s') + G * |s - s'|. That
   only lowers, so the axis becomes a valley floor rising gently from both feet to a col. landform.lua then lets
   the hillsides rise from this floor exactly as from any valley (no cut, no walls), so the pass reads as two
   valleys meeting at a broad saddle.
@@ -29,12 +30,27 @@ M.MARGIN = 0.85
 
 -- Axis (x, y in local metres) resampled every `step` metres, with terrain heights h and the graded floor z <= h.
 -- Water on the axis (a lake, a river) counts as bridged at `low` metres, so the floor does not dive into it.
-function M.profile(H, g, axis, G, step, low)
+-- window (metres, the floor's half-width; landform passes PASS_FLOOR / 2): h is the lowest ground across the axis within
+-- +-window, not the ground on the axis. A side valley running beside the axis inside the floor's width otherwise stayed
+-- below a floor graded on the axis, and the floor ran on its rim (steepest 100 m up to 4.5 % on the final map; Alpine
+-- and Mountain Range, 16 km, 2026-10-11). Every pass since 2026-10-13 (owner, run 9, REVIEW B9: Mountain Range at Gentle
+-- and Mountainous too; before, an opt-in per map type, Alpine, and the curved middle steps).
+function M.profile(H, g, axis, G, step, low, window)
 	local x, y = grid.resample(axis.x, axis.y, step)
 	local n = #x
 	local hs, z, ds = {}, {}, { 0 }
 	for q = 1, n do
-		hs[q] = max(low, grid.sample(H, g.w, g.h, g.cell, x[q], y[q]))
+		local v = grid.sample(H, g.w, g.h, g.cell, x[q], y[q])
+		local a, b = max(1, q - 1), min(n, q + 1)
+		local dx, dy = x[b] - x[a], y[b] - y[a]
+		local len = sqrt(dx * dx + dy * dy)
+		if len > 0 then
+			local nx, ny = -dy / len, dx / len
+			for _, f in ipairs({ -1, -0.5, 0.5, 1 }) do
+				v = min(v, grid.sample(H, g.w, g.h, g.cell, x[q] + nx * f * window, y[q] + ny * f * window))
+			end
+		end
+		hs[q] = max(low, v)
 		z[q] = hs[q]
 		if q > 1 then
 			local dx, dy = x[q] - x[q - 1], y[q] - y[q - 1]
@@ -48,12 +64,12 @@ function M.profile(H, g, axis, G, step, low)
 	return { x = x, y = y, h = hs, z = z, grade = G, length = length }
 end
 
--- Profiles of all corridors of a shape.
-function M.build(H, g, corridors, relief, low)
+-- Profiles of all corridors of a shape (window: the floor's half-width, see M.profile).
+function M.build(H, g, corridors, relief, low, window)
 	local out = {}
 	for _, axis in ipairs(corridors or {}) do
 		if #axis.x > 1 then
-			local p = M.profile(H, g, axis, M.TARGET[relief] * M.MARGIN, max(8, g.cell * 0.5), low)
+			local p = M.profile(H, g, axis, M.TARGET[relief] * M.MARGIN, max(8, g.cell * 0.5), low, window)
 			p.target = M.TARGET[relief]
 			out[#out + 1] = p
 		end

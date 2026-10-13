@@ -95,6 +95,7 @@ function M.nearestSeed(w, h, cell, seeds, maxCost, ctx)
 	local best, cost = {}, {}
 	local huge = math.huge
 	for k = 1, n do best[k] = 0; cost[k] = huge end
+	if ctx then ctx.tick() end
 	local sx, sy, soff = seeds.x, seeds.y, seeds.off
 	for s = 1, seeds.n do
 		local k = seeds.node[s]

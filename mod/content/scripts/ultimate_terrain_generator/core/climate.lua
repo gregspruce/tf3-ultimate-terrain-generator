@@ -26,7 +26,7 @@ M.PROFILES = {
 	temperate = {
 		key = "temperate", label = "Temperate", finished = true,
 		snowLine = 330, rockLine = 280,
-		fits = { "great_river_valley", "delta_lowlands", "mountain_passes", "rolling_plains", "lake_district",
+		fits = { "great_river_valley", "delta_lowlands", "mountain_passes", "alpine", "rolling_plains", "lake_district",
 			"large_bays", "peninsulas", "island_chain", "coastal_region", "highland_plateau" },
 		newTypes = {},
 		rivers = 1, lakes = 1,
@@ -35,7 +35,7 @@ M.PROFILES = {
 		key = "subarctic", label = "Subarctic", finished = false,
 		snowLine = 210, rockLine = 130,                -- subarctic_clima.tree.lua: snow 210 -> 250 m, rock 130 -> 160 m
 		fits = { "lake_district", "peninsulas", "large_bays", "island_chain", "coastal_region", "highland_plateau",
-			"mountain_passes" },
+			"mountain_passes", "alpine" },
 		newTypes = { "fjord_coast" },
 		rivers = 1, lakes = 1.75,                      -- finger lakes; vanilla Subarctic has no rivers layer
 	},

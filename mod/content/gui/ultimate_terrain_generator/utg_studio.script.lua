@@ -3,17 +3,19 @@ Ultimate Terrain Generator - Studio window (map editor only).
 
 WHAT IT DOES
   A "UTG" button in the mod button area opens the Studio:
-    tabs   Settings (map type, relief, water, ship rivers, seed) / Terrain parameters (one slider per pipeline.TUNE
-           entry) / Report (the map report). Run 5: four sparse tabs meant too much switching; run 6: the sliders on
-           their own tab, fields side by side, more spacing, a window sized to the screen with the preview pane
-           always beside the settings, and "Larger window" (a second size; windows cannot be dragged to any size)
+    tabs   Settings (map type, relief, water, ship rivers, side, Great River Valley's sea, seed; Lower tree density
+           for the finishing pass) / Terrain parameters (one slider per pipeline.TUNE entry) / Report (the map
+           report). Run 5: four sparse tabs meant too much switching; run 6: the sliders on their own tab, fields
+           side by side, more spacing, a window sized to the screen with the preview pane always beside the
+           settings, and "Larger window" (a second size; windows cannot be dragged to any size)
     Generate  runs the terrain core (scripts/ultimate_terrain_generator/core/pipeline.lua) spread over frames
               (react.onStep + pipeline.job with a time budget per frame), so the editor stays responsive
     Preview   generates (if the settings changed) and runs the finishing pass of this climate (an import-style
               generator that keeps our heights and adds biomes, forests, rock, river trees and the data maps) on the
               generated heights, in this window, through the map editor's Import biomes mode
     Apply     replaces the world terrain with the finished preview (or with the bare heights where this climate has
-              no finishing pass yet)
+              no finishing pass yet); when the settings changed since that preview, or there is none, it first runs
+              what Preview runs and applies the new map when it is ready (owner 2026-10-13, run 9)
     Undo      puts back the terrain from before the last Apply (trees are not restored)
     Test set  (debug) generates a fixed list of cases (TEST_SET: map types, Relief, Water; one seed) on this map size
               and exports each one's heights, without touching the world: standard data for comparing builds.
@@ -27,6 +29,8 @@ WHAT IT DOES
               map type, relief and seed, and an "[UTG] Export" line repeats the full settings and the height
               range (the PNG is normalised to the map's own min..max), so every export matches its log lines.
   Every step is logged to stdout.txt with the prefix "[UTG]".
+  The window wraps the game's own Window recipe even when another mod replaced builtin.Window (which made the game
+  crash when the window opened, 2026-10-13); if that is impossible the mod button says why ("The window recipe" below).
 
 VERIFIED IN GAME (diagnostic test runs 1-4, 2026-10-06)
   - GameMap.heightmap returns a copy on every read: heights are written by assigning the whole table.
@@ -59,6 +63,9 @@ local eg = require "ultimate_terrain_generator::/scripts/ultimate_terrain_genera
 local PREFIX = "[UTG] "
 local FRAME_BUDGET = 0.025 -- seconds of terrain work per frame while generating
 local FINISH_TAG = "utg_finish_" -- our finishing-pass generators: content/climates/<climate>/utg_finish_<climate>.gen.lua
+-- the finishing pass's tree density parameter (declared in its gen.lua by tools/build_finish_tree.py, TREE_KEY there;
+-- the key is kept from the Forests setting it replaced)
+local TREES_KEY = "utg_forests"
 local HEIGHT_MIN, HEIGHT_MAX = -99, 3170 -- inside the engine's valid range (-100 .. 3176.75 m, probe run 2)
 
 -- ------------------------------------------------------------------------------------------------
@@ -182,15 +189,24 @@ local function sendReplaceTerrain(map, keepAssets, label, seed, onDone)
 		end)
 end
 
--- The finishing-pass generator of the current climate (editor only), or nil.
+-- The finishing-pass generator of the current climate (editor only), or nil; second value: whether that pass declares
+-- the tree density parameter. Only a pass built to thin its trees declares it (tools/build_finish_tree.py; review
+-- 2026-10-12: a draft pass shipped as built has none, so its climate gets no box that does nothing). The declared
+-- parameters are read as the base editor reads them (gui/map_editor/map_editor.tl addMissingGeneratorParams).
 local function finishingGenerator()
 	local climate = api.res.getBaseConfig().climate
 	for k, _ in pairs(app.res.terrainGeneratorRep.getAll()) do
 		local gen = app.res.terrainGeneratorRep.get(k)
 		local name = tostring(app.res.terrainGeneratorRep.getName(k))
-		if gen.climate == climate and gen.isImportGenerator and name:find(FINISH_TAG, 1, true) then return name end
+		if gen.climate == climate and gen.isImportGenerator and name:find(FINISH_TAG, 1, true) then
+			local trees = false
+			for _, p in ipairs(gen.params or {}) do
+				if p.key == TREES_KEY then trees = true end
+			end
+			return name, trees
+		end
 	end
-	return nil
+	return nil, false
 end
 
 -- After every Apply: what the game's data maps say (TERRAIN.dataMaps, 32 m cells, values 0..1; industries research
@@ -236,17 +252,114 @@ end
 -- ------------------------------------------------------------------------------------------------
 local MAP_TYPES = {} -- from the core, in its order
 for i, id in ipairs(shapes.ORDER) do MAP_TYPES[i] = { id = id, label = shapes.TYPES[id].label or id } end
-local RELIEF = {} -- from the core (pipeline.RELIEF; run 6: Flat dropped, Moderate and Rugged added)
+-- from the core (pipeline.RELIEF; run 6: Flat dropped, Moderate and Rugged added); the box opens at
+-- pipeline.DEFAULT_RELIEF (Hilly, the middle step; owner 2026-10-12, REVIEW B1)
+local RELIEF = {}
 for i, r in ipairs(pipeline.RELIEF) do RELIEF[i] = r.label end
 local WATER = { "Dry", "Normal", "Wet" }
+-- Lower tree density (owner 2026-10-13, run 9: "change the forest drop down to a checkbox that is 'Lower Tree Density'";
+-- it replaced the Forests box Few / Normal / Many of REVIEW B7): a setting of the finishing pass, not of the terrain
+-- core. Unticked = Normal (index 1, the pass as approved in runs 4-6, 9 and 12-13), ticked = Lower (index 2: the pass
+-- places half the trees; where forests grow, forest_mask and every other data map stay the same). It stays out of
+-- settingsText (heights, their logs and the baselines do not depend on it), so a change alone re-runs only the
+-- finishing pass, not Generate. Log text per index (log lines are not translated):
+local TREES_LOG = { "trees normal", "trees lower" }
 local SHIPS = { "Map type default", "None", "One", "Several" } -- index 1 = nil (default), else index - 2
--- feature side (owner 2026-10-08): index 1 = from the seed, 2..5 = shapes.SIDES north, east, south, west
+-- feature side (owner 2026-10-08): index 1 = from the seed, 2..5 = shapes.SIDES north, east, south, west; 6 = None (no
+-- sea, owner 2026-10-11), offered only on the map types that allow it (shapes.TYPES[id].side.none). A type with its own
+-- choices (side.choices: Sea Strait's direction, owner 2026-10-12) lists Random and those (values 1..4 to the core)
 local SIDES = { "Random", "North", "East", "South", "West" }
+local SIDE_NONE_INDEX = shapes.SIDE_NONE + 1
+local function sideChoices(info)
+	if info.side and info.side.choices then
+		local t = { SIDES[1] }
+		for i, l in ipairs(info.side.choices) do t[i + 1] = l end
+		return t
+	end
+	if not (info.side and info.side.none) then return SIDES end
+	local t = {}
+	for i, l in ipairs(SIDES) do t[i] = l end
+	t[SIDE_NONE_INDEX] = "None"
+	return t
+end
+
+-- The side box's choice a map type pre-selects (window index): its side.default (shapes.lua; Alpine None, owner
+-- 2026-10-13, REVIEW C5), else Random.
+local function defaultSide(id)
+	local sd = shapes.TYPES[id].side
+	return ((sd and sd.default) or 0) + 1
+end
+
+-- S.settings.side is the player's choice, or nil while they have not chosen one: then the box shows, and the core gets,
+-- the map type's pre-selected side (so the window can start on any type, and coming back to Alpine shows None again).
+local function sideIndex(st)
+	return st.side or defaultSide(MAP_TYPES[st.mapType].id)
+end
+
+-- Owner 2026-10-11: after a map type change every control must show what will be used. An edge the player chose (North,
+-- East, South, West or None) stays when it names the same edge on the new type (same label and edge, e.g. Sea side on
+-- both) and the new type offers it (None only where allowed). Otherwise nil: the new type's pre-selected side, which
+-- the side box then shows. Random is not carried (it names no edge), nor a type's pre-selection (Alpine's None does not
+-- follow the player to Mountain Range; REVIEW C5, 2026-10-13).
+local function sideAfterTypeChange(oldId, newId, side)
+	if side == nil or side == 1 then return nil end
+	local a, b = shapes.TYPES[oldId].side, shapes.TYPES[newId].side
+	if not (a and b and a.label == b.label and a.edge == b.edge) then return nil end
+	if side > #sideChoices(shapes.TYPES[newId]) then return nil end
+	return side
+end
+
+-- Sea (owner 2026-10-12, REVIEW B8): a map type whose side box names where its river comes from and whose sea is a
+-- setting of its own (shapes.TYPES[id].side.seaChoice: Great River Valley) gets its own box under the side box:
+-- index 1 = the sea where the river ends, 2 = None (no sea: the river leaves the map there). Every map type change
+-- resets it (only this type has it, so it is never revived on coming back, like the side after Island Chain).
+local SEA = { "At the river mouth", "None" }
+-- the core's `sea` setting for a window choice on a map type: false = no sea, nil = the sea (an explicit if: the
+-- idiom "cond and false or nil" can never give false)
+local function seaSetting(id, choice)
+	local sd = shapes.TYPES[id].side
+	if choice == 2 and sd and sd.seaChoice then return false end
+	return nil
+end
+
+-- Ship rivers choices; the first names the map type's own default, so the box shows what "default" will give
+local function shipChoices(info)
+	local t = {}
+	for i, l in ipairs(SHIPS) do t[i] = l end
+	local def = info.preset and info.preset.ships
+	if def ~= nil and SHIPS[def + 2] ~= nil then
+		t[1] = { text = T("Map type default") .. " (" .. T(SHIPS[def + 2]) .. ")" }
+	end
+	return t
+end
 -- Advanced sliders: percent of the designed value (100 = as designed), one per pipeline.TUNE entry
 local TUNE_LABELS = {
 	height = "Overall height", hills = "Hill country", hillHeight = "Hill height", detail = "Surface detail",
 	coast = "Coast roughness", rivers = "Rivers", lakes = "Lakes", meander = "River bends", valley = "Valley width",
 	gullies = "Erosion",
+}
+-- What each slider does on the map, in plain words for players new to terrain generation (owner 2026-10-13, REVIEW B2:
+-- "'Hill Country' and 'Hill Height' need at least a tooltip explaining what they do"). Each text follows the core's
+-- real use of the multiplier (pipeline.TUNE): height = the Terrain step's height target (landform target; the hills and
+-- raised ground scale with it); hills = the share of the land in hill-country patches (landform HILL_COVER; 50-60 % at
+-- 100 %, all of it at 200 %); hillHeight = how high those hills rise (HILL_AMP), not where they are; detail = metre-scale
+-- roughness on hill country and steep ground (detail.DETAIL_AMP; none on plains, floodplains, beaches and pass floors);
+-- gullies = spurs and gullies down
+-- the slopes, deeper on steeper ground (gullies.lua), 0 = off; coast = the ragged noise on the coastline
+-- (shapes.COAST_RAG), none without sea; rivers = divides the drained area a river needs (smaller valleys get rivers);
+-- lakes = the lakes wanted on the rivers (natural basins only; oxbow lakes are not counted); meander = how strongly
+-- rivers wind (0: only the valley's gentle curve is left); valley = the width of the floodplains and valley sides.
+local TUNE_TIPS = {
+	height = "How high the whole land rises: hills, mountains and plateaus together. Lower it for flatter land that is easier for railways and roads; raise it for higher, steeper land with more snow on the peaks. 0 % gives almost flat land.",
+	hills = "How much of the land is hill country: patches of hills a few kilometres across, with lower, open land between them. Lower it for more open land for towns and railways; raise it for more hills (at 200 % nearly all the land). How tall the hills are is Hill height.",
+	hillHeight = "How tall the hills in the hill country are. Lower it for low, gentle hills that roads and railways cross easily; raise it for tall, steep hills. Where the hills are and how much land they cover stays the same (that is Hill country).",
+	detail = "Small bumps a few metres high on hills and slopes, so they look natural rather than smooth. Plains, valley floors and beaches get none, so they stay easy to build on. Lower it for smoother hills, raise it for rougher, rockier ground.",
+	gullies = "Ridges and gullies running down the slopes, as if carved by rain over a long time; the steeper the slope, the deeper they are. Flat land gets none. 0 % turns them off for smooth slopes; raise it for rugged hillsides.",
+	coast = "How ragged the coastline is: coves, headlands and small bays. Lower it for a smoother, straighter coast; raise it for a more jagged one. No effect on maps without sea.",
+	rivers = "How many rivers and streams the map gets. Above 100 % smaller valleys get their own streams, so there are more rivers reaching further up into the hills; below 100 % only the larger rivers are left. The Water setting sets the starting amount.",
+	lakes = "How many lakes form along the rivers (up to 300 %). Lakes need natural hollows, so above 100 % a map may have no room for more; the Report then says so. 0 % gives no lakes apart from small oxbow lakes beside river bends.",
+	meander = "How much the rivers wind. 0 % gives almost straight rivers that follow the valley's gentle curve, easy to run a railway beside; raise it for wide, looping bends.",
+	valley = "How wide the flat valley floors along the rivers are. Wider valleys give more flat land beside the rivers for towns, stations and railways; at 0 % the valleys are narrow with steep sides.",
 }
 local function defaultTune()
 	local t = {}
@@ -255,7 +368,10 @@ local function defaultTune()
 end
 
 local S = {
-	settings = { mapType = 1, relief = 1, water = 2, ships = 1, side = 1, seed = nil, tune = defaultTune(),
+	-- side = nil: none chosen yet, the map type's pre-selected side (sideIndex)
+	settings = { mapType = 1, relief = pipeline.DEFAULT_RELIEF, water = 2, ships = 1, side = nil, sea = 1, seed = nil,
+		trees = 1, -- the finishing pass's tree density: 1 = Normal, 2 = Lower (the Lower tree density box ticked)
+		tune = defaultTune(),
 		-- on Apply, like the game's own generator window: towns and industries are removed unless kept
 		keepTowns = false, keepIndustries = false },
 	-- the generator the window runs: "utg" (this mod's core) or a game generator's name (studio/engine_generators.lua)
@@ -263,6 +379,8 @@ local S = {
 	engine = { params = {}, seed = nil, list = nil }, -- per generator name: { key = value }; the list is cached
 	requestKind = nil, -- "utg" or "engine": what the current preview request came from
 	requestText = nil, -- the settings the current preview request was made with (stale-preview note)
+	requestTrees = nil, -- the tree density of the last finishing-pass request (stale-preview note, Apply log); kept
+	                    -- when closing the window clears S.request, as S.ready is; nil when the pass has no such parameter
 	measure = nil,     -- numbers of a finished engine preview (Report tab): { text, for }
 	job = nil,        -- running pipeline.job
 	jobT0 = 0,
@@ -279,6 +397,9 @@ local S = {
 	undoApplied = nil, -- the same for the terrain Undo puts back (nil: not one of ours)
 	batch = nil,      -- running test set: { id, i, caseId, t0, exported, failed, sizeX, sizeY }
 	busy = false,     -- a terrain replacement is in flight
+	applyAfter = nil, -- Apply to map waits for the preview of these settings: { text (currentSettingsLine), since }
+	applyCancelled = false, -- a settings change cancelled the waiting Apply: the note line says so until the next Preview
+	                        -- or Apply click (the status line is soon overwritten by Generate's progress, run 9 review)
 }
 
 local seeded = false
@@ -298,7 +419,8 @@ local function coreSettings()
 		relief = st.relief,
 		water = st.water,
 		ships = st.ships > 1 and (st.ships - 2) or nil,
-		side = (st.side or 1) - 1, -- 0 = from the seed
+		side = sideIndex(st) - 1, -- 0 = from the seed
+		sea = seaSetting(MAP_TYPES[st.mapType].id, st.sea), -- false = no sea (Great River Valley's Sea None), nil = sea
 		seed = ensureSeed(),
 		tune = (function()
 			local t = {}
@@ -308,10 +430,19 @@ local function coreSettings()
 	}
 end
 
-local function settingsText(cs)
-	-- the feature side appears only when chosen, so logs of maps made without it read as before (export_check parses it)
-	local side = (cs.side and cs.side > 0) and (", side " .. shapes.SIDES[cs.side]) or ""
-	local txt = string.format("%s, relief %s, water %s, ship rivers %s%s, seed %s", cs.mapType, RELIEF[cs.relief],
+-- shown = true: the Report's "For:" line, which names the step by the box's label, "terrain Hilly" (REVIEW B12); the
+-- log lines keep "relief Hilly" (export_check parses them, and older logs read the same)
+local function settingsText(cs, shown)
+	-- the feature side appears only when chosen, so logs of maps made without it read as before (export_check parses it);
+	-- shapes.sideName: north .. west, none, or a type's own names (Sea Strait: ew, ns, swne, nwse)
+	local side = (cs.side and cs.side > 0) and (", side " .. (shapes.sideName(cs.mapType, cs.side) or "none")) or ""
+	-- Sea None on Great River Valley, only then (logs of every other map read as before; export_check parses it). The
+	-- text must change with the box: the stale-preview note compares these texts
+	if cs.sea == false then side = side .. ", sea none" end
+	-- like the rest of this line (map type id, "water", "ship rivers"), the word is not a translated window text
+	local stepWord = "relief"
+	if shown then stepWord = "terrain" end
+	local txt = string.format("%s, %s %s, water %s, ship rivers %s%s, seed %s", cs.mapType, stepWord, RELIEF[cs.relief],
 		WATER[cs.water], cs.ships == nil and "default" or tostring(cs.ships), side, tostring(cs.seed))
 	-- Advanced settings that differ from the design (percent)
 	local parts = {}
@@ -346,7 +477,9 @@ local function startGenerate(setStatus)
 	local cs = coreSettings()
 	S.genId = newId()
 	out("Generate " .. S.genId .. ": " .. settingsText(cs) .. string.format(", map %.0f x %.0f m", maxX - minX, maxY - minY))
-	S.result, S.request, S.ready, S.heightsMap = nil, nil, nil, nil
+	-- a finishing pass still due for the result being replaced is dropped (the Preview behind this Generate starts the
+	-- new result's own; without coroutines it would otherwise run once more on the next frame)
+	S.result, S.request, S.ready, S.heightsMap, S.autoPreviewNext = nil, nil, nil, nil, false
 	if type(coroutine) ~= "table" then
 		-- no coroutines in this Lua: run in one go (the editor pauses for a few seconds)
 		out("coroutine library missing: generating in one go")
@@ -378,9 +511,12 @@ local function stepGenerate()
 	return "Generated."
 end
 
--- A copy of the world map carrying the generated heights (the engine's grid must match the core's).
+-- A copy of the world map carrying the generated heights (the engine's grid must match the core's). Without the world's
+-- towns and industries, as the base Import biomes tab builds its input (gui/map_editor/map_editor.tl 1224): the import
+-- pass hands input towns on to its result, and a terrain map that lists towns crashes the game on Apply
+-- ("terrain_util::ReplaceTerrain: Assertion 'map.towns.empty()' failed", run 7). Kept towns stay in the world anyway.
 local function buildHeightsMap()
-	local base = api.engine.terrain.makeMapFromGame(true, true, true, false)
+	local base = api.engine.terrain.makeMapFromGame(true, false, false, false)
 	base.waterLevel = 0
 	local copy = api.type.Map.new(base)
 	local w, h = gridOf(copy)
@@ -468,13 +604,30 @@ local function biomeFile(name, map, fresh)
 	return listed(app.getAllBiomes, name .. "_biomes")
 end
 
-local function finishRequest(gen, biomes)
+-- the tree density as log text after sep ("; trees lower"), or "" for nil: the pass in use declares no tree density
+-- parameter, so no choice reached it
+local function treesText(i, sep)
+	if i == nil then return "" end
+	return sep .. tostring(TREES_LOG[i] or ("trees " .. tostring(i)))
+end
+
+-- withTrees: the pass declares the tree density parameter (finishingGenerator's second value)
+local function finishRequest(gen, biomes, withTrees)
 	local mode = api.type.ImportBiomesMode.new()
 	mode.terrainGenerator = gen
 	mode.biomeMap = biomes
 	mode.layerMaps = {}
+	-- params: the pass's declared parameters as 1-based choice indices, as the base editor passes a generator's
+	-- parameters to its preview (gui/map_editor/map_editor.tl addMissingGeneratorParams; its Import biomes tab too,
+	-- 1194-1202 and 2675-2678). The engine hands the pass the choice normalised, not as a raw index (seen in game with
+	-- the three Forests choices, run 9); by the design rule (index - 1) / (count - 1) that is 0 for Normal and 1 for
+	-- Lower (inferred), and the pass gives Normal the factor 1 under index / count too. Nothing is sent to a pass that
+	-- does not declare it.
+	local trees = nil
+	if withTrees then trees = S.settings.trees end
 	-- a fresh copy per request: the native preview only runs again when its inputs change
-	return { mode = mode, inputMap = api.type.Map.new(S.heightsMap), params = {}, seed = S.resultSeed, generator = gen }
+	return { mode = mode, inputMap = api.type.Map.new(S.heightsMap), params = { [TREES_KEY] = trees },
+		seed = S.resultSeed, generator = gen, trees = trees }
 end
 
 local function startPreview(setStatus)
@@ -492,7 +645,7 @@ local function startPreview(setStatus)
 		return
 	end
 	if S.result == nil then setStatus("Generate first.") return end
-	local gen = finishingGenerator()
+	local gen, withTrees = finishingGenerator()
 	if gen == nil then
 		setStatus("No finishing pass for this climate yet: Apply sets the heights only.")
 		return
@@ -504,9 +657,9 @@ local function startPreview(setStatus)
 		return
 	end
 	S.ready = nil
-	S.request = finishRequest(gen, biomes)
-	S.requestKind, S.requestText = "utg", settingsText(S.result.settings)
-	out(string.format("Preview: finishing pass %s (Import biomes mode)", tostring(gen)))
+	S.request = finishRequest(gen, biomes, withTrees)
+	S.requestKind, S.requestText, S.requestTrees = "utg", settingsText(S.result.settings), S.request.trees
+	out(string.format("Preview: finishing pass %s (Import biomes mode)%s", tostring(gen), treesText(S.request.trees, ", ")))
 	-- the preview picture shows the land only; the pass computes forests and biomes for Apply (owner: the old text
 	-- "adding forests ... in the preview" promised something the preview cannot show)
 	setStatus("Finishing the map for the preview...")
@@ -514,8 +667,13 @@ end
 
 -- Preview button. For this mod's generator one click does it all (owner 2026-10-08): when there is no map for the
 -- current settings yet, it generates first and the window starts the finishing pass when the map is done
--- (S.autoPreview, handled in the window's step function); otherwise it previews the map in hand.
+-- (S.autoPreview, handled in the window's step function); otherwise it previews the map in hand. Lower tree density is
+-- not a core setting (not in settingsText), so after a change of it alone only the finishing pass runs again.
 local function previewClicked(setStatus)
+	S.applyCancelled = false -- a new click: the note about the cancelled Apply has been read
+	-- the button is greyed out while Apply waits; the handler refuses as well, as Undo's, Test set's and Run test's do
+	-- (a pass started now would be the one the wait applies)
+	if S.applyAfter ~= nil then setStatus("Wait for the current work to finish.") return end
 	if S.source == "utg" and S.batch == nil then
 		if S.job ~= nil then setStatus("Still generating.") return end
 		local current = false
@@ -536,13 +694,63 @@ local function previewClicked(setStatus)
 	startPreview(setStatus)
 end
 
--- Whether Apply has something to apply (for the button's enabled state; no side effects, called on every render).
-local function canApplyNow()
+-- Whether the settings changed since the map in hand was made (the stale-preview note; Apply then makes a new preview
+-- first). This mod's generator: the terrain settings against the generated result, and the tree density against the
+-- finishing pass in hand (it is not in settingsText: heights do not depend on it; a request or a ready map exists only
+-- after a finishing-pass Preview of this result, since Generate clears both; requestTrees nil: the pass declares no tree
+-- density parameter, so the box cannot matter). A game generator: its settings against the last preview request's.
+-- Nothing in hand (or a Generate running) is not "changed": Apply then sees that no map is ready.
+local function settingsChanged()
+	if S.source == "utg" then
+		if S.result == nil or S.job ~= nil then return false end
+		local okS, now = pcall(function() return settingsText(pipeline.normalise(coreSettings())) end)
+		if okS and now ~= settingsText(S.result.settings) then return true end
+		return S.requestKind == "utg" and (S.request ~= nil or S.ready ~= nil) and S.requestTrees ~= nil
+			and S.requestTrees ~= S.settings.trees
+	end
+	if S.requestKind ~= "engine" then return false end
+	local g = engineGen()
+	if g == nil then return false end
+	local okS, now = pcall(engineSettingsText, g)
+	return okS and now ~= S.requestText
+end
+
+-- The window's current settings as one line, what a Preview now would be made with (a waiting Apply compares it every
+-- frame: any change after the click cancels the Apply, even during a Generate, when settingsChanged cannot tell yet)
+local function currentSettingsLine()
+	if S.source ~= "utg" then
+		local g = engineGen()
+		return g and engineSettingsText(g) or ("generator " .. tostring(S.source))
+	end
+	return settingsText(pipeline.normalise(coreSettings())) .. treesText(S.settings.trees, "; ")
+end
+
+-- Whether Apply can put in, right now, a map made with the current settings (no side effects; called on every render
+-- for the button's look). Before 2026-10-13 a ready preview was applied whatever the settings had become since, so a
+-- change followed by Apply changed nothing (owner, run 9).
+local function applyReadyNow()
+	if settingsChanged() then return false end
 	if S.source ~= "utg" then return S.requestKind == "engine" and S.ready ~= nil end
-	if S.result == nil then return false end
+	if S.result == nil or S.job ~= nil then return false end
 	if S.ready ~= nil and S.requestKind == "utg" then return true end
 	local ok, gen = pcall(finishingGenerator)
 	return ok and gen == nil -- no finishing pass for this climate: the bare heights can be applied
+end
+
+-- Whether a preview for the current settings is being made, so a waiting Apply only has to wait for it: this mod's
+-- Generate (started by Preview; a change during it is caught by currentSettingsLine), the finishing pass about to start
+-- (the frame after Generate) or running, or a game generator's preview running. The pass about to start is for the
+-- result just generated, so it counts only when the settings still match it (run 9 review: Apply clicked in that one
+-- frame after a change during Generate would otherwise wait for the older map and cancel itself).
+local function previewRunning()
+	local kind = "engine" -- what the request must have come from (S.requestKind)
+	if S.source == "utg" then
+		if S.batch ~= nil then return false end
+		if S.job ~= nil then return true end
+		if S.autoPreviewNext then return not settingsChanged() end
+		kind = "utg"
+	end
+	return S.request ~= nil and S.ready == nil and S.requestKind == kind and not settingsChanged()
 end
 
 -- What Apply would put into the world now, or nil and the reason.
@@ -559,7 +767,10 @@ local function applyTarget()
 		return { id = S.resultId, settings = S.result.settings, text = settingsText(S.result.settings), range = S.resultRange }
 	end
 	if S.ready ~= nil and S.requestKind == "utg" then
-		return { map = S.ready, what = "finished map", seed = S.resultSeed, pending = pending() }
+		-- the tree density the ready map was finished with, not the box's current one (run material ties screenshots
+		-- to it)
+		return { map = S.ready, what = "finished map" .. treesText(S.requestTrees, ", "), seed = S.resultSeed,
+			pending = pending() }
 	end
 	if finishingGenerator() == nil then
 		S.heightsMap = S.heightsMap or buildHeightsMap()
@@ -578,15 +789,49 @@ local function setBusy(on)
 	S.busySince = on and wallClock() or nil
 end
 
-local function apply(setStatus)
+-- Apply to map when the map in hand is not the one for the current settings, or there is none yet (owner 2026-10-13,
+-- run 9: "Should 'Apply to map' button also run the preview button task silently?" - yes): it runs what Preview runs
+-- (Generate if the terrain settings changed, else only the finishing pass; a game generator's preview), unless a
+-- preview of these settings is already being made, and S.applyAfter makes the window's step function apply that map
+-- as soon as it is ready (stepApplyAfter). An older map is never applied: a settings change while it waits cancels it.
+-- The window counts a waiting Apply as busy (the buttons wait, as during Run test).
+local function startApplyAfterPreview(setStatus)
+	local said = nil
+	if not previewRunning() then previewClicked(function(t) said = t end) end
+	if not (previewRunning() or applyReadyNow()) then
+		-- Preview refused (it says why, e.g. a generator not available); nothing waits
+		out("Apply: the preview could not be started: " .. tostring(said))
+		setStatus(said or "Nothing applied.")
+		return
+	end
+	S.applyAfter = { text = currentSettingsLine(), since = wallClock() }
+	out("Apply: making the preview for the current settings first: " .. S.applyAfter.text)
+	setStatus("Making the preview, then applying...")
+end
+
+-- noRefresh (Run test): apply only the map in hand; when it is not the one for the current settings, refuse.
+-- Returns true when the map is on its way in.
+local function apply(setStatus, noRefresh)
+	S.applyCancelled = false -- a new click (or the waiting Apply going ahead): the cancel note has done its job
 	if S.batch ~= nil then setStatus("The test set is running (Stop test set first).") return end
 	if S.job ~= nil then setStatus("Still generating.") return end
 	if S.busy then setStatus("Still applying...") return end
+	if S.applyAfter ~= nil then setStatus("Making the preview, then applying...") return end -- a second click
+	if not applyReadyNow() then
+		if noRefresh then
+			out("Apply refused: the map in hand was not made with the current settings")
+			setStatus("Settings changed since the last Preview: nothing applied.")
+			return
+		end
+		startApplyAfterPreview(setStatus)
+		return
+	end
 	local target, why = applyTarget()
 	if target == nil then setStatus(why) return end
 	local st = S.settings
 	local map = api.type.Map.new(target.map)
-	local undoMap = api.engine.terrain.makeMapFromGame(true, true, true, false)
+	-- terrain only: Undo replaces the terrain, and a map listing towns would crash it (see buildHeightsMap)
+	local undoMap = api.engine.terrain.makeMapFromGame(true, false, false, false)
 	setBusy(true)
 	pcall(function() api.gui.map.setMapSeedText(target.seed) end)
 	out(string.format("Apply: %s (keep towns %s, keep industries %s)", target.what, tostring(st.keepTowns),
@@ -627,10 +872,50 @@ local function apply(setStatus)
 		out("Apply FAILED while removing towns or industries: " .. tostring(errRm))
 		setStatus(T("Apply failed while removing towns or industries:") .. " " .. tostring(errRm))
 	end
+	return true
+end
+
+-- A waiting Apply, every frame (window step function): cancelled when any setting changed since the click (the map that
+-- is coming is then outdated); applied through apply() as soon as the map for the settings is ready, so its guards, the
+-- Undo snapshot of the world as it is then, and Keep towns / Keep industries as ticked then all hold; cancelled when
+-- nothing is making that map any more (Generate or the preview failed: oldStatus says why), or after APPLY_WAIT_TIMEOUT
+-- seconds without the preview (Generate not counted: it reports its own progress), so the buttons never stay locked.
+local APPLY_WAIT_TIMEOUT = 180
+local function stepApplyAfter(setStatus, oldStatus)
+	local pa = S.applyAfter
+	local generating = S.job ~= nil or S.autoPreviewNext == true
+	if generating then pa.since = wallClock() end
+	local okL, line = pcall(currentSettingsLine)
+	if not okL or line ~= pa.text or settingsChanged() then
+		S.applyAfter = nil
+		S.applyCancelled = true -- the note line keeps saying so (Generate's progress and the preview overwrite the status)
+		out("Apply cancelled: the settings changed while the preview was being made")
+		setStatus("Settings changed while the preview was being made: nothing applied. Press Apply to map again.")
+		return
+	end
+	if generating then return end
+	if applyReadyNow() then
+		S.applyAfter = nil
+		out("Apply: the preview for the current settings is ready")
+		apply(setStatus)
+		return
+	end
+	if not previewRunning() then
+		S.applyAfter = nil
+		out("Apply cancelled: the preview was not made")
+		setStatus(T("Nothing applied.") .. " " .. T(oldStatus or ""))
+		return
+	end
+	if wallClock() - pa.since > APPLY_WAIT_TIMEOUT then
+		S.applyAfter = nil
+		out(string.format("Apply cancelled: no preview after %d s", APPLY_WAIT_TIMEOUT))
+		setStatus("The preview did not finish (see the log): nothing applied. The buttons work again.")
+	end
 end
 
 local function undo(setStatus)
 	if S.batch ~= nil then setStatus("The test set is running (Stop test set first).") return end
+	if S.applyAfter ~= nil then setStatus("Wait for the current work to finish.") return end -- an Apply is on its way
 	if S.undoMap == nil then setStatus("Nothing to undo.") return end
 	if S.busy then setStatus("Still applying...") return end
 	local map = S.undoMap
@@ -728,11 +1013,16 @@ end
 
 local function startAutoTest(setStatus)
 	if S.source ~= "utg" then setStatus("Run test works with this mod's generator.") return end
-	if S.job ~= nil or S.batch ~= nil or S.busy or S.autoTest ~= nil then setStatus("Wait for the current work to finish.") return end
-	if finishingGenerator() == nil then setStatus("Run test needs a climate with a finishing pass (Temperate).") return end
+	if S.job ~= nil or S.batch ~= nil or S.busy or S.autoTest ~= nil or S.applyAfter ~= nil then
+		setStatus("Wait for the current work to finish.")
+		return
+	end
+	local gen, withTrees = finishingGenerator()
+	if gen == nil then setStatus("Run test needs a climate with a finishing pass (Temperate).") return end
 	S.autoTest = { id = newId() }
-	out(string.format("Run test %s: %s; keep towns %s, keep industries %s", S.autoTest.id,
-		settingsText(pipeline.normalise(coreSettings())), tostring(S.settings.keepTowns), tostring(S.settings.keepIndustries)))
+	out(string.format("Run test %s: %s%s; keep towns %s, keep industries %s", S.autoTest.id,
+		settingsText(pipeline.normalise(coreSettings())), treesText(withTrees and S.settings.trees or nil, "; "),
+		tostring(S.settings.keepTowns), tostring(S.settings.keepIndustries)))
 	autoTestStage("preview")
 	previewClicked(setStatus)
 end
@@ -829,6 +1119,8 @@ local function toggleTestSet(setStatus)
 		return
 	end
 	if S.job ~= nil then setStatus("Still generating.") return end
+	-- the set replaces the result and the preview an Apply waits for
+	if S.applyAfter ~= nil then setStatus("Wait for the current work to finish.") return end
 	if type(coroutine) ~= "table" then setStatus("The test set needs coroutines, which this game's Lua lacks.") return end
 	local minX, minY, maxX, maxY = mapBounds()
 	local b = { id = newId(), i = 0, t0 = clock(), exported = 0, failed = 0, sizeX = maxX - minX, sizeY = maxY - minY }
@@ -852,21 +1144,28 @@ end
   No API tells a mod the screen size or the UI scale (base GUI: px and vw/vh only), so the window takes screen shares
   and the column takes pixels, as the base windows do. Classes and sizes: utg_studio.css.lua. ]]
 -- class: "utg-combo" (default) or "utg-combo-wide" (long entries, e.g. generator names)
-local function combo(labels, value, onChange, class)
+-- labels: window texts (translated here), or { text = "..." } for a text already made from translated parts
+-- key: a node key (meta.localKey, react.lua) for boxes whose choices depend on the map type. A new key makes the engine
+-- build a new box showing `value`, as the base game keys its parameter widgets by what they stand for
+-- (construction.tl: uiType + name), so a box can never keep a choice from the previous map type on screen.
+local function combo(labels, value, onChange, class, key)
 	local items = {}
 	for i, l in ipairs(labels) do
-		items[#items + 1] = builtin.ComboBoxItem{ value = i, content = text(l) } -- text() translates
+		local content = type(l) == "table" and builtin.TextView{ text = l.text } or text(l) -- text() translates
+		items[#items + 1] = builtin.ComboBoxItem{ value = i, content = content }
 	end
-	return builtin.ComboBox{ meta = { class = class or "utg-combo" }, value = value, items = items, onValueChange = onChange }
+	return builtin.ComboBox{ meta = { class = class or "utg-combo", localKey = key }, value = value, items = items,
+		onValueChange = onChange }
 end
 
 local function styled(class, orientation, children)
 	return builtin.BoxLayout{ meta = { class = class }, orientation = orientation, children = children }
 end
 
--- text classes: our size/wrap class plus the base text-size class (follows the game's text-size setting)
-local function label(s, class)
-	return builtin.TextView{ meta = { class = (class or "utg-label") .. ", font-scale-body" }, text = T(s) }
+-- text classes: our size/wrap class plus the base text-size class (follows the game's text-size setting); tip: tooltip
+-- (translated text)
+local function label(s, class, tip)
+	return builtin.TextView{ meta = { class = (class or "utg-label") .. ", font-scale-body", tooltip = tip }, text = T(s) }
 end
 
 local function help(s, class)
@@ -1000,8 +1299,13 @@ local StudioPanel = react.RegisterRecipe("UtgStudioPanel", function(params)
 			local at = S.autoTest
 			local okA, errA = pcall(function()
 				if at.stage == "apply" then
-					apply(function() end)
-					at.applying = true
+					-- only the map this test previewed (a setting changed during the test: stop, never a new preview)
+					if apply(function() end, true) then
+						at.applying = true
+					else
+						autoTestEnd("stopped")
+						statusState:set("Run test stopped: the settings changed during the test (see the saved log).")
+					end
 				end
 			end)
 			if not okA then
@@ -1018,6 +1322,16 @@ local StudioPanel = react.RegisterRecipe("UtgStudioPanel", function(params)
 				msg = T("Preview failed:") .. " " .. tostring(errP)
 			end
 			statusState:set(T("Generated.") .. " " .. T(msg or "Preview"))
+		end
+		-- Apply to map waiting for its preview (owner 2026-10-13, run 9): after the steps above, so the frame that starts
+		-- the finishing pass, or finds there is none (heights only), is the one that checks
+		if S.applyAfter ~= nil then
+			local okW, errW = pcall(stepApplyAfter, function(t) statusState:set(t) end, statusState:old())
+			if not okW then
+				S.applyAfter = nil
+				out("Apply FAILED: " .. tostring(errW))
+				statusState:set(T("Apply failed:") .. " " .. tostring(errW))
+			end
 		end
 		if S.autoTest ~= nil and S.autoTest.applying and not S.busy then
 			-- Apply answered (or refused): export the world and end
@@ -1061,7 +1375,12 @@ local StudioPanel = react.RegisterRecipe("UtgStudioPanel", function(params)
 	if not isUtg and g == nil then S.source, isUtg = "utg", true end -- generator gone: back to this mod's own
 	local mapType = MAP_TYPES[st.mapType]
 	local typeInfo = shapes.TYPES[mapType.id] or {}
-	local busy = S.job ~= nil or S.batch ~= nil or S.busy or S.autoTest ~= nil
+	-- (an Apply waiting for its preview counts: the buttons wait, as during Run test)
+	local busy = S.job ~= nil or S.batch ~= nil or S.busy or S.autoTest ~= nil or S.applyAfter ~= nil
+	-- this climate has a finishing pass (Apply's next step, Run test), and it declares the tree density parameter (box)
+	local okF, finishGen, finishTrees = pcall(finishingGenerator)
+	local hasFinish = okF and finishGen ~= nil
+	local hasTrees = hasFinish and finishTrees == true
 
 	-- Generator choice: this mod's own first, then the game's generators of this climate (vanilla and mods)
 	local function generatorRow()
@@ -1083,6 +1402,10 @@ local StudioPanel = react.RegisterRecipe("UtgStudioPanel", function(params)
 				if S.job ~= nil and S.batch == nil then
 					S.job = nil -- a running Generate belongs to this mod's generator
 					out("Generate stopped: generator switched")
+				end
+				if S.applyAfter ~= nil then
+					S.applyAfter = nil -- its preview was the other generator's
+					out("Apply cancelled: generator switched")
 				end
 				out("Generator: " .. (src == "utg" and "Ultimate Terrain Generator" or src))
 				setStatus(src == "utg" and "Press Preview."
@@ -1126,24 +1449,67 @@ local StudioPanel = react.RegisterRecipe("UtgStudioPanel", function(params)
 			for i, m in ipairs(MAP_TYPES) do mapLabels[i] = m.label end
 			items[#items + 1] = fieldRow({
 				field("Map type", combo(mapLabels, st.mapType, function(v)
-					if v ~= st.mapType then st.side = 1 end -- "Sea side" and "River comes from" mean different edges
+					-- an edge the player chose stays where it means the same edge (sideAfterTypeChange), else the new type's
+					-- pre-selected side (None on Alpine); the Sea box (one type only) goes back to the sea
+					if v ~= st.mapType then
+						st.side = sideAfterTypeChange(MAP_TYPES[st.mapType].id, MAP_TYPES[v].id, st.side)
+						st.sea = 1
+					end
 					st.mapType = v
 					changed()
 				end)),
-				field("Relief", combo(RELIEF, st.relief, function(v) st.relief = v; changed() end),
-					T("Gentle suits most networks; higher is steeper. Rugged and Mountainous reach the snow line (about 350 m).")),
+				-- labelled "Terrain" since 2026-10-12 (owner, REVIEW B12: the game's own heading for these settings);
+				-- internally still relief (settings key, pipeline.RELIEF, the settings line in the log; the Report shows it
+				-- as "terrain", settingsText)
+				field("Terrain", combo(RELIEF, st.relief, function(v) st.relief = v; changed() end),
+					T("Hilly is the middle step. Gentle gives the most flat land, higher is steeper. Snow from about 330 m: Alpine's peaks reach it from Gentle, the highest hills of most other map types from Hilly.")),
 			})
 			items[#items + 1] = help(typeInfo.description or "", "utg-desc")
 			items[#items + 1] = fieldRow({
 				field("Water", combo(WATER, st.water, function(v) st.water = v; changed() end),
 					T("How many rivers and lakes.")),
-				field("Ship rivers", combo(SHIPS, st.ships, function(v) st.ships = v; changed() end),
+				-- keyed by map type: its first choice names this type's default
+				field("Ship rivers", combo(shipChoices(typeInfo), st.ships, function(v) st.ships = v; changed() end, nil,
+					"utg-ships-" .. mapType.id),
 					T("Rivers wide and deep enough for ships; the default depends on the map type.")),
 			})
 			if typeInfo.side then
-				-- which map edge gets the map type's defining feature (Random: the seed decides, as before)
-				items[#items + 1] = field(typeInfo.side.label, combo(SIDES, st.side or 1, function(v) st.side = v; changed() end),
-					T("Where the map type's main feature goes. Random: the seed decides."), "utg-label-wide")
+				-- which map edge gets the map type's defining feature (Random: the seed decides, as before; the type's
+				-- pre-selection until the player chooses, sideIndex); keyed by map type, since its label, meaning, choices
+				-- (None) and pre-selection depend on it
+				local choices = sideChoices(typeInfo)
+				if (st.side or 1) > #choices then st.side = nil end -- (never shown or used: a choice this type lacks)
+				local sideTip = T("Where the map type's main feature goes. Random: the seed decides.")
+				if typeInfo.side.none then
+					sideTip = T("Where the map type's main feature goes. Random: the seed decides. None: no sea.")
+				elseif typeInfo.side.edge == "axis" then
+					sideTip = T("Which way the strait runs. East-West: from the west edge to the east edge, with land to the north and south. North-South: with land to the west and east. Diagonal: from near one corner to near the opposite one, along the long side (on a map three or more times as long as wide, or under about 3 km across, it runs nearly straight: only a few degrees off the long side). Random: the seed decides.")
+				end
+				items[#items + 1] = field(typeInfo.side.label, combo(choices, sideIndex(st), function(v) st.side = v; changed() end,
+					nil, "utg-side-" .. mapType.id), sideTip, "utg-label-wide")
+				if typeInfo.side.seaChoice then
+					-- its own box (Great River Valley): the side box keeps naming where the river comes from; keyed by map
+					-- type like the side box; wide label, so its box lines up with the side box above
+					items[#items + 1] = field("Sea", combo(SEA, st.sea or 1, function(v) st.sea = v; changed() end, nil,
+						"utg-sea-" .. mapType.id),
+						T("Where the big river ends: in the sea, on the edge opposite where it comes from. None: no sea; the river leaves the map there."),
+						"utg-label-wide")
+				end
+				if sideIndex(st) == SIDE_NONE_INDEX or seaSetting(mapType.id, st.sea) == false then
+					items[#items + 1] = help("No sea: the land goes on where the sea would be, and the rivers leave the map there.",
+						"utg-note")
+				end
+			end
+			if hasTrees then
+				-- Lower tree density (owner 2026-10-13, run 9): the finishing pass's own setting, so only where this
+				-- climate's pass declares it; a check box (CheckBox value 0/1 = the pass's index 1/2) in a labelled row like
+				-- the other fields; keyed like the boxes (the key only names it for checks). The tooltip says in plain words
+				-- what the owner asked for: the forest areas stay, only the number of trees drops.
+				local tip = T("Fewer tree models for lower-spec computers (about half). Where forests grow stays the same; only how many trees are placed changes.")
+				items[#items + 1] = field("Trees", builtin.CheckBox{
+					meta = { class = "utg-check", tooltip = tip, localKey = "utg-lower-trees" },
+					label = T("Lower tree density"), value = st.trees == 2 and 1 or 0,
+					onValueChange = function(v) st.trees = (v == 1) and 2 or 1; changed() end }, tip)
 			end
 			items[#items + 1] = seedRow()
 			items[#items + 1] = keepRow()
@@ -1180,23 +1546,34 @@ local StudioPanel = react.RegisterRecipe("UtgStudioPanel", function(params)
 		return page(items)
 	end
 	local function parametersTab()
-		local items = { help("100 % = as designed for the map type and Relief.") }
-		-- sliders this map type has nothing for (core data, shapes.TYPES[id].inactive)
-		local inactive, names = {}, {}
-		for _, key in ipairs(typeInfo.inactive or {}) do
+		local items = { help("100 % = as designed for the map type and the Terrain setting.") }
+		-- sliders without effect here (core data, shapes.inactiveFor): the map type's own (shapes.TYPES[id].inactive) and
+		-- those its side makes idle (no sea: no coast to roughen); each note names its own cause, since Coast roughness
+		-- does work on these types when they have a sea
+		local inactive, typeNames, sideNames, own = {}, {}, {}, {}
+		for _, key in ipairs(typeInfo.inactive or {}) do own[key] = true end
+		for _, key in ipairs(shapes.inactiveFor(mapType.id, sideIndex(st) - 1, seaSetting(mapType.id, st.sea))) do
 			inactive[key] = true
-			names[#names + 1] = T(TUNE_LABELS[key] or key)
+			local list = own[key] and typeNames or sideNames
+			list[#list + 1] = T(TUNE_LABELS[key] or key)
 		end
-		if #names > 0 then
-			items[#items + 1] = help(string.format("%s %s", T("No effect on this map type:"), table.concat(names, ", ")),
+		if #typeNames > 0 then
+			items[#items + 1] = help(string.format("%s %s", T("No effect on this map type:"), table.concat(typeNames, ", ")),
+				"utg-note")
+		end
+		if #sideNames > 0 then
+			items[#items + 1] = help(string.format("%s %s", T("No effect without sea:"), table.concat(sideNames, ", ")),
 				"utg-note")
 		end
 		for _, e in ipairs(pipeline.TUNE) do
 			local key = e.key
 			local maxPct = math.floor(e.max * 100)
+			-- the slider's tooltip on its name and on the slider itself (REVIEW B2; the base game puts tooltips on sliders
+			-- too: gui/music_player/music_player.tl)
+			local tip = TUNE_TIPS[key] and T(TUNE_TIPS[key]) or nil
 			items[#items + 1] = styled("utg-field", H, {
-				label(TUNE_LABELS[key] or key, "utg-label-wide"),
-				builtin.Slider{ meta = { class = "utg-slider" }, min = 0, max = maxPct, step = 5, pageStep = 25,
+				label(TUNE_LABELS[key] or key, "utg-label-wide", tip),
+				builtin.Slider{ meta = { class = "utg-slider", tooltip = tip }, min = 0, max = maxPct, step = 5, pageStep = 25,
 					value = st.tune[key], onValueChange = function(v) st.tune[key] = v; changed() end },
 				builtin.TextView{ meta = { class = "utg-value, font-scale-body" },
 					text = inactive[key] and "-" or string.format("%d %%", st.tune[key]) },
@@ -1221,7 +1598,7 @@ local StudioPanel = react.RegisterRecipe("UtgStudioPanel", function(params)
 				lines[1] = help("Press Preview for the map and its numbers.")
 			end
 		elseif S.result ~= nil then
-			lines[#lines + 1] = help(T("For:") .. " " .. settingsText(S.result.settings))
+			lines[#lines + 1] = help(T("For:") .. " " .. settingsText(S.result.settings, true))
 			for line in report.format(S.result.report):gmatch("[^\n]+") do
 				lines[#lines + 1] = help(line, line:find("^note:") and "utg-note" or nil)
 			end
@@ -1231,18 +1608,16 @@ local StudioPanel = react.RegisterRecipe("UtgStudioPanel", function(params)
 		return page(lines)
 	end
 
-	-- settings changed since the map in hand was made: Preview and Apply would use the older one
+	-- settings changed since the map in hand was made (settingsChanged): Preview and Apply make a new one; while an Apply
+	-- waits for its preview the same line says so, and after a settings change cancelled it, that (until the next Preview
+	-- or Apply click: the status line shows Generate's progress and "Preview ready" meanwhile, run 9 review)
 	local stale = nil
-	if isUtg and S.result ~= nil and S.job == nil then
-		local okS, now = pcall(function() return settingsText(pipeline.normalise(coreSettings())) end)
-		if okS and now ~= settingsText(S.result.settings) then
-			stale = T("Settings changed since the last Preview.")
-		end
-	elseif not isUtg and S.requestKind == "engine" then
-		local okS, now = pcall(engineSettingsText, g)
-		if okS and now ~= S.requestText then
-			stale = T("Settings changed since the last Preview.")
-		end
+	if S.applyCancelled then
+		stale = T("Settings changed while the preview was being made: nothing applied. Press Apply to map again.")
+	elseif settingsChanged() then
+		stale = T("Settings changed since the last Preview.")
+	elseif S.applyAfter ~= nil then
+		stale = T("Apply to map waits for this preview, then applies it.")
 	end
 
 	local tabs = { tab("settings", "Settings", settingsTab) }
@@ -1254,21 +1629,29 @@ local StudioPanel = react.RegisterRecipe("UtgStudioPanel", function(params)
 	-- buttons (2026-10-08, players: "the buttons don't look like buttons"): the game's plain Button has an invisible
 	-- background and border; base windows mark main actions "primary" (filled) and others "secondary" (outlined), and
 	-- disable buttons that cannot act (meta.enabled; base gui/map_editor/map_editor.tl:733, main/default.css.lua:77-120)
-	local canApply = (not busy) and canApplyNow()
-	local okF, finishGen = pcall(finishingGenerator)
-	local hasFinish = okF and finishGen ~= nil
 	local canPreview = not busy
-	-- the next step is the one filled ("primary") button: Preview -> Apply (a new Preview when the settings changed)
-	local nextStep = (canApply and stale == nil and (S.ready ~= nil or (isUtg and not hasFinish))) and "apply" or "preview"
+	-- Apply works whenever Preview does (owner 2026-10-13, run 9): without a map for the current settings it makes the
+	-- preview first (startApplyAfterPreview)
+	local canApply = canPreview
+	local applyNow = canApply and applyReadyNow()
+	-- the next step is the one filled ("primary") button: Preview -> Apply (Preview again when the settings changed)
+	local nextStep = applyNow and "apply" or "preview"
 	local function kind(step) return nextStep == step and "primary" or "secondary" end
+	local applyTip = T("Wait for the current work to finish.")
+	if applyNow and isUtg and not hasFinish then
+		applyTip = T("Puts the generated heights on your map (this climate gets no forests or biomes yet).")
+	elseif applyNow then
+		applyTip = T("Puts the previewed map on your map. Forests and biomes are added now; the preview shows the land only.")
+	elseif canApply then
+		applyTip = T("Makes the preview for the current settings first (as Preview does), then puts that map on your map.")
+	end
 	local actions = {}
 	actions[#actions + 1] = button("Preview", function()
 		guarded("Preview", function() previewClicked(setStatus) end, setStatus)
 	end, kind("preview"), canPreview, (not canPreview) and T("Wait for the current work to finish.") or nil)
 	actions[#actions + 1] = button("Apply to map", function()
 		guarded("Apply", function() apply(setStatus) end, setStatus)
-	end, kind("apply"), canApply, (not canApply) and T("Press Preview and wait for the finished preview first.")
-		or T("Forests and biomes are added on Apply; the preview shows the land only."))
+	end, kind("apply"), canApply, applyTip)
 	actions[#actions + 1] = button("Undo", function()
 		guarded("Undo", function() undo(setStatus) end, setStatus)
 	end, "secondary", (not busy) and S.undoMap ~= nil)
@@ -1344,8 +1727,12 @@ local StudioPanel = react.RegisterRecipe("UtgStudioPanel", function(params)
 					tostring(request.generator)))
 				if S.requestKind == "engine" then startMeasure(map, S.requestText) end
 				local keepsAll = S.settings.keepTowns and S.settings.keepIndustries
-				statusState:set(keepsAll and "Preview ready. Apply to map replaces the terrain."
-					or "Preview ready. Apply to map also removes towns and industries not kept.")
+				if S.applyAfter ~= nil then
+					statusState:set("Applying...") -- the waiting Apply puts it in on the next frame (stepApplyAfter)
+				else
+					statusState:set(keepsAll and "Preview ready. Apply to map replaces the terrain."
+						or "Preview ready. Apply to map also removes towns and industries not kept.")
+				end
 				if S.autoTest ~= nil and S.requestKind == "utg" then
 					local okT, msgT = pcall(autoTestReady, map)
 					if not okT then
@@ -1405,21 +1792,96 @@ local function windowWidthClass()
 	return windowClass or nil
 end
 
-local StudioWindow = react.RegisterWrapperRecipe("UtgStudioWindow", builtin.Window, function(params)
+-- ------------------------------------------------------------------------------------------------
+-- The window recipe: a wrapper of the game's own Window, whatever other mods did to builtin.Window
+-- ------------------------------------------------------------------------------------------------
+-- A window recipe must wrap the game's Window component: the engine's window container finds the window node through
+-- _react.recipeMetas[<window recipe id>].innerRecipeId (base gui/main/react.lua RegisterRecipeInner, lines 248-261;
+-- the engine reads both names). react.RegisterWrapperRecipe(name, builtin.Window, fn) finds that id from the FUNCTION
+-- it is given (react.lua's recipeFnToRecipeId, which knows only registered recipe functions). A mod that replaces
+-- builtin.Window with a function of its own before this script loads therefore makes the wrapper "a wrapper around
+-- nil", and opening the window kills the game (NodeStorage.cpp:51 assertion; seen 2026-10-13). The game keeps its own
+-- Window recipe in the global tables of base/init.lua: its id in _react.builtin.Window (the id builtin.lua declares it
+-- with) and its node constructor in _react.originalRecipeFn[id]. So:
+--   react reports builtin.Window as the game's Window (react.GetRecipeId gives that id): the normal wrapper, and the
+--     window node built by that function, captured now (a mod that replaces builtin.Window later cannot change this
+--     window either). Then the record RegisterWrapperRecipe wrote is checked, not assumed: a mod can also replace
+--     react's own functions (GetRecipeId, RegisterWrapperRecipe), and a lookup that names the game's Window while the
+--     registration records nothing would bring the crash back. A record that does not name the game's Window is
+--     repaired as below;
+--   builtin.Window replaced (or the record wrong): the same registration by id: react.RegisterRecipe (or the recipe
+--     just registered), then recipeMetas[our id] = { innerRecipeId = the game's id } (exactly what
+--     RegisterWrapperRecipe writes for a wrapper of the game's Window), and the node built as the game's registered
+--     function builds it (an official recipe replacement first, then the constructor; react.lua 380-388). react's
+--     per-render check of a wrapper's child (checkRecipeMatch) only logs a verbose line on a mismatch, and the child
+--     is the game's Window by construction;
+--   neither possible (the game's tables not as expected): no window at all; the mod button says why (never a crash).
+-- Returns the recipe (nil when unavailable), the Window constructor for its body, and the problem text (nil if none).
+local function recipeIdOf(fn)
+	local ok, id = pcall(react.GetRecipeId, fn)
+	return ok and id or nil
+end
+
+local function registerWindowRecipe(name, fn)
+	local R = type(_react) == "table" and _react or {}
+	local windowId = type(R.builtin) == "table" and R.builtin.Window or nil
+	local current = recipeIdOf(builtin.Window)
+	local recipe, why
+	if current ~= nil and (windowId == nil or current == windowId) then
+		local window = builtin.Window
+		recipe = react.RegisterWrapperRecipe(name, window, fn)
+		-- nothing to check against when the game's tables are not as expected: the normal wrapper as before
+		if windowId == nil or type(R.recipeMetas) ~= "table" then return recipe, window, nil end
+		local meta = R.recipeMetas[recipeIdOf(recipe)]
+		if type(meta) == "table" and meta.innerRecipeId == windowId then return recipe, window, nil end
+		why = "react did not record the game's Window for the Studio window"
+	else
+		why = current == nil and "builtin.Window is a function react does not know"
+			or string.format("builtin.Window is now recipe id %s", tostring(current))
+	end
+	local construct = windowId ~= nil and type(R.originalRecipeFn) == "table" and R.originalRecipeFn[windowId] or nil
+	if type(construct) ~= "function" or type(R.recipeMetas) ~= "table" then
+		return nil, nil, string.format("%s, and the game's Window recipe was not found (id %s)", why, tostring(windowId))
+	end
+	recipe = recipe or react.RegisterRecipe(name, fn)
+	local id = recipeIdOf(recipe)
+	if id == nil then return nil, nil, "the window recipe got no id" end
+	R.recipeMetas[id] = { innerRecipeId = windowId }
+	out(string.format("Another mod replaced the game's window component (%s): the Studio window wraps the game's own "
+		.. "Window recipe (id %s) instead", why, tostring(windowId)))
+	local function window(...)
+		local replacement = type(R.recipeReplace) == "table" and R.recipeReplace[windowId] or nil
+		if replacement then return replacement(...) end
+		return construct(...)
+	end
+	return recipe, window, nil
+end
+
+-- what the mod button says when the window cannot open (translated when the button is drawn)
+local function windowUnavailableText()
+	return T("The Studio window cannot open safely: another mod replaced the game's window component and the game's own one was not found. Disable mods that change game windows, then load the map again.")
+end
+
+local StudioWindow, gameWindow, windowProblem -- gameWindow: the Window constructor the window body uses
+StudioWindow, gameWindow, windowProblem = registerWindowRecipe("UtgStudioWindow", function(params)
 	-- two sizes, as the base Statistics window: windows cannot be dragged to any size (WindowParam has no resize),
 	-- but `expanded` switches to the second size set in utg_studio.css.lua
 	local expandedState = react.useState(false)
 	local okW, wclass = pcall(windowWidthClass)
-	return builtin.Window{
+	return gameWindow{
 		meta = { class = okW and wclass or nil },
 		id = "utg.studio.window",
 		title = T("Ultimate Terrain Generator"),
 		closable = true,
 		onClose = params.onClose,
-		-- placed by the stylesheet like the base Statistics and map editor windows (centred, bottom up, 64 px above the
-		-- game bar; those are not movable either). In game 2026-10-08 initialX = 0.5 left the window at the screen's
-		-- left edge, under the game's own left tool strip.
-		movable = false,
+		-- movable (owner, run 7: "Studio window no longer movable"), placed like the base's movable windows by shares of
+		-- the free space (entity windows: initialX = 1, initialY = 0, gui/entity_window/view_manager.tl 310; dialogs 0.5 =
+		-- centred). The stylesheet only sizes the window: a stylesheet gravity pins it (base Statistics, not movable).
+		-- (2026-10-08 initialX = 0.5 opened at the left edge, but the window then ignored its width caps and filled
+		-- almost the whole screen, so there was no free space to share; the width now comes from the screen.)
+		movable = true,
+		initialX = 0.5,
+		initialY = 0.5,
 		expanded = expandedState:old(),
 		content = StudioPanel{
 			expanded = expandedState:old(),
@@ -1427,6 +1889,7 @@ local StudioWindow = react.RegisterWrapperRecipe("UtgStudioWindow", builtin.Wind
 		},
 	}
 end)
+if windowProblem ~= nil then out("Studio window unavailable: " .. windowProblem) end
 
 local function isMapEditor()
 	local ok, value = pcall(function() return api.gui.game.isMapEditor() end)
@@ -1439,8 +1902,23 @@ local UtgModButtonPlugin = react.RegisterPluginRecipe(main_mod_button_area.MainM
 		if not isMapEditor() then
 			return hbox({})
 		end
+		if StudioWindow == nil then
+			-- the window cannot open safely (registerWindowRecipe): the button stays, says why and opens nothing. A plain
+			-- Button, not the toggle: it has no on/off state that a refused click could leave pressed.
+			return hbox({
+				builtin.Button{
+					content = builtin.TextView{ text = "UTG", meta = { tooltip = windowUnavailableText() } },
+					onClick = function() out("Studio window not opened: " .. tostring(windowProblem)) end,
+				},
+			})
+		end
 		local function closeWindow()
 			S.request = nil -- keep S.ready for Apply; Preview shows the map again
+			if S.applyAfter ~= nil then
+				-- its preview stops with the window, and a closed window must not change the map later
+				S.applyAfter = nil
+				out("Apply cancelled: the window was closed")
+			end
 			local windowApi = game_react_globals.getDefaultWindowApi()
 			if windowApi then windowApi.removeAllWindows(StudioWindow) end
 			openState:set(false)

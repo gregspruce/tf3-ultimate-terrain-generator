@@ -6,14 +6,20 @@ USE
   local pipeline = require "ultimate_terrain_generator::/scripts/ultimate_terrain_generator/core/pipeline.lua"
   local result = pipeline.run(settings, map [, hooks])
     settings = { mapType = "great_river_valley" | "delta_lowlands" | "mountain_passes",
-                 relief = 1..5 (M.RELIEF: Gentle, Moderate, Hilly, Rugged, Mountainous), water = 1..3 (Dry, Normal, Wet),
+                 relief = 1..5 (M.RELIEF: Gentle, Moderate, Hilly, Rugged, Mountainous; nil = M.DEFAULT_RELIEF,
+                          3, Hilly), water = 1..3 (Dry, Normal, Wet),
                  ships = nil (map type default) | 0 (None) | 1 (One) | 2 (Several), seed = number or string,
-                 side = 0 (from the seed) | 1..4 (feature side north, east, south, west; shapes.TYPES[id].side),
+                 side = 0 (from the seed) | 1..4 (feature side north, east, south, west; shapes.TYPES[id].side;
+                          on Sea Strait the direction East-West, North-South, Diagonal SW-NE, NW-SE: side.choices)
+                        | 5 (Sea side None: no sea; only where shapes.TYPES[id].side.none),
+                 sea = nil (the sea, as designed) | false (Sea None: no sea; only where
+                       shapes.TYPES[id].side.seaChoice, Great River Valley; ignored elsewhere),
                  tune = { key = multiplier } (optional; Advanced settings, 1 = as designed; M.TUNE lists them) }
     map      = { sizeX, sizeY }  map size in metres (the heightmap has sizeX / 4 + 1 nodes per row)
     hooks    = { tick = function() end (called often; may yield), stage = function(name) end }
   result = { heights (flat array, index j * w + i + 1, metres, as GameMap.heightmap), w, h,
              report (report.lua), paths (river courses), lakes, corridors (pass routes, passes.lua),
+             strait, lanes (Sea Strait: its axis every 25 m with half-width and narrows indices; the carved lane),
              coarse = { g, h, kind, A, B, U },
              timings = { {stage, seconds}... }, settings (normalised) }
 
@@ -48,6 +54,9 @@ M.RELIEF = {
 	{ key = "rugged", label = "Rugged" },
 	{ key = "mountainous", label = "Mountainous" },
 }
+-- the Relief a new Studio session starts with and normalise uses when settings.relief is nil: Hilly, the middle step
+-- (owner 2026-10-12, REVIEW B1)
+M.DEFAULT_RELIEF = 3
 M.A_WATER = { 30e6, 12e6, 5e6 } -- m^2 drained before a channel holds water: Dry, Normal, Wet (11 km map)
 M.MIN_RIVER = 1500              -- m: shorter leaf rivers are dropped (a map type may set preset.minRiver, e.g. islands)
 M.MAX_COARSE = 300000           -- coarse nodes: the cell is the smallest of 16, 32, 64 m within this
@@ -71,10 +80,19 @@ function M.normalise(settings)
 	local s = {}
 	for k, v in pairs(settings or {}) do s[k] = v end
 	s.mapType = shapes.TYPES[s.mapType or ""] and s.mapType or "great_river_valley"
-	s.relief = min(#M.RELIEF, max(1, floor(s.relief or 1)))
+	s.relief = min(#M.RELIEF, max(1, floor(s.relief or M.DEFAULT_RELIEF)))
 	s.water = min(3, max(1, floor(s.water or 2)))
-	-- feature side (0 = from the seed; 1..4 = shapes.SIDES north, east, south, west); types without one ignore it
-	s.side = shapes.TYPES[s.mapType].side and min(4, max(0, floor(tonumber(s.side) or 0))) or 0
+	-- feature side (0 = from the seed; 1..4 = shapes.SIDES north, east, south, west; 5 = shapes.SIDE_NONE, no sea, only
+	-- on types that offer it, else from the seed); types without a side ignore it
+	local side, T = floor(tonumber(s.side) or 0), shapes.TYPES[s.mapType]
+	local maxSide = (T.side and T.side.none) and shapes.SIDE_NONE or 4
+	if side == shapes.SIDE_NONE and maxSide < shapes.SIDE_NONE then side = 0 end
+	s.side = T.side and min(maxSide, max(0, side)) or 0
+	-- Sea None on a type whose sea is a setting of its own (shapes side.seaChoice: Great River Valley; owner 2026-10-12,
+	-- REVIEW B8): false = no sea; nil (the sea) everywhere else, so every request that does not use it is unchanged.
+	-- An explicit if: the idiom "cond and false or nil" can never give false.
+	s.sea = nil
+	if T.side and T.side.seaChoice and settings and settings.sea == false then s.sea = false end
 	if s.ships == nil then s.ships = shapes.TYPES[s.mapType].preset.ships end
 	s.ships = min(2, max(0, floor(s.ships)))
 	if s.seed == nil then s.seed = 1 end
@@ -111,7 +129,7 @@ function M.run(settings, map, hooks)
 		if hooks.stage then hooks.stage(name) end
 	end
 
-	local shape = shapes.build(s.mapType, g, s.seed, ctx, s.tune, s.side)
+	local shape = shapes.build(s.mapType, g, s.seed, ctx, s.tune, s.side, s.sea)
 	stage("shape")
 
 	local f = hydrology.flood(shape.B, g, shape.sea, shape.outlets, ctx)
@@ -136,9 +154,14 @@ function M.run(settings, map, hooks)
 	local H = detail.upsample(lf.h, g, Wf, Hf, lf.kind, s, shape.preset, s.seed, ctx, lf.rough)
 	stage("detail")
 	detail.carve(H, Wf, Hf, paths, ctx)
+	-- Sea Strait: the shipping lane where the strait is narrow (shapes.lua out.lanes; not a river, so not in paths): ships
+	-- always pass end to end, whatever the coarse cell does to a throat
+	if shape.lanes then detail.carve(H, Wf, Hf, shape.lanes, ctx) end
 	stage("carve")
 
-	local rep = report.build(H, Wf, Hf, paths, lf.lakes, ctx, lf.corridors, { g = g, kind = lf.kind })
+	-- (shape.strait: the strait's axis, Sea Strait only; the report measures its crossings along it)
+	local rep = report.build(H, Wf, Hf, paths, lf.lakes, ctx, lf.corridors,
+		{ g = g, kind = lf.kind, strait = shape.strait })
 	-- what the settings asked for, so the report can say when the map could not give it (offline settings test 2026-10-08:
 	-- Ship rivers One/Several on maps with no large river, Lakes above 100 % with no more lake sites)
 	rep.shipsAsked, rep.lakesWanted = s.ships, lf.lakesWanted
@@ -146,6 +169,7 @@ function M.run(settings, map, hooks)
 
 	return {
 		heights = H, w = Wf, h = Hf, report = rep, paths = paths, lakes = lf.lakes, corridors = lf.corridors,
+		strait = shape.strait, lanes = shape.lanes, -- (Sea Strait only: its axis and the carved lane; tools measure them)
 		timings = timings, settings = s,
 		coarse = { g = g, h = lf.h, kind = lf.kind, A = A, B = shape.B, U = shape.U, water = water,
 			orientation = shape.orientation },

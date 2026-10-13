@@ -14,7 +14,21 @@ return {
 	isImportGenerator = true,
 	nodeTree = "utg_finish_temperate_gen.tree",
 	order = 50,
-	params = { },
+	params = {
+		{
+			defaultIndex = 1,
+			images = { },
+			key = "utg_forests",
+			name = _("Lower tree density"),
+			tags = { },
+			tooltip = _("Fewer tree models for lower-spec computers (about half). Where forests grow stays the same; only how many trees are placed changes."),
+			uiType = "ComboBox",
+			valueIndices = { },
+			values = { _("Normal"), _("Lower"), },
+			yearFrom = 0,
+			yearTo = 0,
+		},
+	},
 	previewSeed = "yQKiK",
 	updateScript = {
 		fileName = "",

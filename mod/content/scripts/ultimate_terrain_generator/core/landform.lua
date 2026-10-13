@@ -12,7 +12,9 @@ HOW THE LAND IS MADE (the "inevitable" model for a map whose water sits at 0 m)
      flattening towards broad tops: buildable uplands); mountain types keep straight slopes. (Per-node stream
      power on tiny areas showed the 8 flow directions as streaks; this does not.)
   3. Relief scaling to the Relief setting (99th percentile of the land: Gentle 140 m .. Mountainous 420 m, times the
-     map type's factor), a slope limit, and smoothing that rounds ridges.
+     map type's factor), a slope limit, and smoothing that rounds ridges. The middle steps (Moderate, Hilly, Rugged)
+     keep flat land: the plains between the hill-country patches carry less of the relief (PLAINS_RELIEF) and the
+     height scale is curved (RELIEF_BEND), so flat land steps evenly from Gentle to Mountainous, as heights do.
   4. Lakes. Natural pits of the organisation field that lie on a river become basins below 0 (largest pits keep
      their deepest part, fragments are dropped); the river flows in and out of them.
   2c. Hill country (game scale): patches of hills added on top (HILL_COVER, HILL_AMP), the main source of
@@ -30,6 +32,9 @@ HOW THE LAND IS MADE (the "inevitable" model for a map whose water sits at 0 m)
   8. Passes (map types with corridors, passes.lua): each pass axis gets a floor graded for railways, and the
      hillsides rise from it like from any valley, so the pass is two valleys meeting at a broad col.
 
+  Sea Strait only (opt-in through shape and preset, DESIGN 23): 3c shapes the banks (a flat shore plain along the sounds,
+  graded banks at the narrows), preset.lakeOpen drops lake tails, preset.shelf.steep deepens the sea's smoothed edge.
+
 OUTPUT: { h = coarse heights, kind = {0 land, 1 sea, 2 lake, 3 estuary}, lakes = list, corridors = pass profiles,
           rough = detail factor per node 0..1 (hill country and steep ground; 0 on pass floors), sLimit = slope limit }
 ]]
@@ -45,7 +50,8 @@ local sqrt, floor, max, min, exp, log = math.sqrt, math.floor, math.max, math.mi
 
 -- Per Relief setting (1 Gentle, 2 Moderate, 3 Hilly, 4 Rugged, 5 Mountainous; pipeline.RELIEF). Run 6: Flat was
 -- dropped (the owner: too uninteresting, Gentle is easy enough) and two steps added; Gentle, Hilly and Mountainous
--- keep their values, Moderate and Rugged lie halfway (CHANNEL_AREA geometrically).
+-- keep their values, Moderate and Rugged lie halfway (CHANNEL_AREA geometrically). Since 2026-10-12 (REVIEW B13) the
+-- middle steps of LAND_SLOPE and HILL_AMP differ, and PLAINS_RELIEF / RELIEF_BEND act on them only (below).
 -- metres above the floodplains (99th percentile of the land, before the hill country). Run 5: Mountainous 750 m
 -- (x 1.8 on Mountain Range = 1.4 km peaks) read as far too big for the game; vanilla peaks reach ~470 m.
 M.RELIEF_P99 = { 140, 210, 280, 350, 420 }
@@ -66,13 +72,16 @@ M.LAND_MIN = 0.6    -- no land node below this (no puddles)
 M.FP_LAKE = 1.5     -- level of the flat ring around a lake
 M.ESTUARY_DEPTH = 2.5 -- metres below sea level of the drowned valley floor at the river mouth (meets the shelf)
 M.SIDE_ZONE = 700     -- metres: width of the valley-side zone (times the map type's valley factor)
+M.RIVER_BANK_AT = 250 -- metres: Sea Strait, beside a river in a narrows' graded banks the land reaches the bank top here
 -- metres above the floodplain of valley-side benches (older floodplains), e.g. { 0, 4, 10, 18 }. Empty since run 5:
 -- the same benches around every lake and stream read as ripple rings, not as landform history.
 M.TERRACES = {}
 M.LAKE_MIN_AREA = 0.12e6 -- m^2
 M.LAKE_SEA_GAP = 400     -- m: lakes keep this far from the sea (else they merge with the river mouth)
 M.LAKES_PER_WATER = { 1, 3, 5 } -- Dry, Normal, Wet (times the map type's factor)
-M.LAND_SLOPE = { 0.05, 0.075, 0.1, 0.14, 0.18 } -- relief cap per Relief: mean slope from the coast inland (small land)
+-- relief cap per Relief: mean slope from the coast inland (small land). Middle steps 2026-10-12 (REVIEW B13): set so
+-- Island Chain's 99th-percentile height steps evenly (0.075 / 0.1 / 0.14 left it at 0.20 / 0.42 / 0.71 of the way)
+M.LAND_SLOPE = { 0.05, 0.088, 0.125, 0.16, 0.18 }
 M.LIFT = 0.7       -- raised ground (plateaus) at lift 1, as a share of the Relief target height
 M.PASS_FLOOR = 140 -- metres: flat floor of a pass corridor (room for a road and a double track)
 M.PASS_CALM = 120  -- metres beyond the pass floor over which the fine detail returns
@@ -82,11 +91,38 @@ M.PASS_CALM = 120  -- metres beyond the pass floor over which the fine detail re
 -- top of the drainage landform, before the valleys are cut (so floodplains stay flat and valley sides cut the hills):
 -- patches of hill country (PATCH_WL), covering HILL_COVER of the land, filled with hills of about HILL_WL.
 M.HILL_COVER = { 0.5, 0.55, 0.6, 0.6, 0.6 } -- share of the land that is hill country, per Relief
-M.HILL_AMP = { 85, 100, 115, 122.5, 130 } -- metres: hill height in the hill country, per Relief (times preset.hills)
+-- metres: hill height in the hill country, per Relief (times preset.hills); linear between Gentle and Mountainous like
+-- the other heights (2026-10-12, REVIEW B13; was 100 / 115 / 122.5)
+M.HILL_AMP = { 85, 96.25, 107.5, 118.75, 130 }
 M.HILL_WL = 800                         -- metres: hill size (largest wavelength of the hill noise)
 M.PATCH_WL = 3500                       -- metres: size of the hill-country patches
 M.PATCH_EDGE = 0.08                     -- width of the patch edge in noise units (soft but distinct borders)
 M.HILL_BLOCK = 0.45                     -- share of the hill height that raises the whole patch (upland block)
+-- (owner 2026-10-12, REVIEW B13): middle steps retuned so flat land steps evenly too; Gentle and Mountainous unchanged.
+-- Before, flat land was mostly gone at Moderate (0.72-0.94 of the way from Gentle to Mountainous at Hilly; Great River
+-- Valley 28.9 / 19 / 18 / 17 / 17.2 %). Gentle's plains lie just under the 3 % flat-land line (Great River Valley: half
+-- of them at 2-4.4 %), so scaling every slope with the height (1.5 x at Moderate) took most flat land at the first
+-- step, and no interpolation of the other tables brought it back while heights stayed even (tested 2026-10-12). Two
+-- numbers per step instead, both neutral at Gentle and Mountainous (0 and 1), so those maps are unchanged:
+--   PLAINS_RELIEF  the plains outside the hill-country patches carry this share of the landform's relief (the patches
+--                  keep all of it), on map types with broad uplands (preset.uplands > 0; mountain types keep their
+--                  massifs and belts whole); the relief scale is set from the landform before and after this
+--                  (geometric mean), so the 99th-percentile height stays the step's on every type.
+--   RELIEF_BEND    the height scale is curved: x = landform height / its 99th percentile becomes (1 - a) x + a x^2
+--                  (tangent above x = 1), so low ground rises 1 - a times as steeply and the high ground 1 + a times.
+-- preset.flatKeep (default 1) scales both for a type whose flat land answers more strongly (Alpine, Peninsulas).
+-- Tuned on all 11 types, 11 km, seeds 1-10, aiming at flat land 0.25 / 0.5 / 0.75 of the way (mean per type). On seeds
+-- 21-30, new to the tuning, 27 of the 33 type-steps lie within +-0.08, and single seeds vary: Island Chain most (Hilly
+-- 0.05-0.82; 3 of 10 seeds, and 2 Lake District seeds, keep slightly more flat land at Moderate than at Gentle).
+-- DESIGN section 14, "Known limits".
+M.PLAINS_RELIEF = { 1, 0.67, 0.6, 0.6, 1 }
+M.RELIEF_BEND = { 0, 0.37, 0.55, 0.5, 0 }
+-- Strait banks (Sea Strait, shapes.lua out.plain / out.bluff; DESIGN 23): the shore plain rises from BEACH at the water
+-- by PLAIN_RISE metres to its inner edge (+1 .. +3.5 m: flat, above any puddle); a narrows' bank reaches the bank top
+-- (shapes.STRAIT.bluffTop, 18-23 m) STRAIT_BLUFF_AT metres from the water and then rises at the Relief's pass grade
+-- (passes.TARGET x MARGIN): a bridge deck high above the ships with a railway grade behind it
+M.PLAIN_RISE = 2.5
+M.STRAIT_BLUFF_AT = 100
 
 local function smoothstep(a, b, x)
 	local t = (x - a) / (b - a)
@@ -198,9 +234,11 @@ function M.build(shape, hydro, paths, fpNode, g, settings, ctx)
 	end
 	if ctx then ctx.tick() end
 
-	-- 2. relief scaling
+	-- 2. relief scaling. The designed height: the Relief step times the type's factor, or the type's own height per
+	--    Relief step (preset.reliefP99: a type whose steps should rise less steeply than the factor would make them)
 	local tune = settings.tune or {}
-	local target = M.RELIEF_P99[relief] * preset.relief * (tune.height or 1)
+	local designed = preset.reliefP99 and preset.reliefP99[relief] or M.RELIEF_P99[relief] * preset.relief
+	local target = designed * (tune.height or 1)
 	-- small land (islands, narrow peninsulas) cannot carry the full relief: the target is capped at a mean slope
 	-- from the coast to the most inland ground (99th percentile of the distance to the sea)
 	if shape.coastDist then
@@ -208,12 +246,67 @@ function M.build(shape, hydro, paths, fpNode, g, settings, ctx)
 		local reach = grid.percentile(cd, w, h, 0.99, function(k) return not sea[k] and cd[k] < math.huge end)
 		target = min(target, M.LAND_SLOPE[relief] * reach)
 	end
-	local p99 = grid.percentile(raw, w, h, 0.99, function(k) return not sea[k] and not water[k] end)
-	local s = target / max(p99, 1e-9)
+	-- hill-country patches (the plains factor here and the hill country in 3b): a share HILL_COVER of the land, chosen
+	-- by a slow noise and its percentile (so the share holds on every seed), with soft but distinct edges; 0 .. 1
+	local cover = M.HILL_COVER[relief] * (preset.hillCover or 1) * (tune.hills or 1)
+	local patchM = {}
+	do
+		local pn = noise.perlin(noise.derive(settings.seed, "hillpatch"))
+		local patch = {}
+		for k = 1, n do
+			if ctx and k % 2048 == 0 then ctx.tick() end
+			local x, y = ((k - 1) % w) * cell, floor((k - 1) / w) * cell
+			patch[k] = noise.fbm(pn, x / M.PATCH_WL, y / M.PATCH_WL, 3, 0.5)
+		end
+		local thr = grid.percentile(patch, w, h, max(0, min(1, 1 - cover)), function(k) return not sea[k] end)
+		-- a tick after each sort here: the three sorts of this step in one go made the Studio's longest frame
+		-- (4 km Rolling Plains: 75 ms between ticks, 24 ms before; review 2026-10-12)
+		if ctx then ctx.tick() end
+		for k = 1, n do
+			patchM[k] = cover > 0.001 and smoothstep(thr - M.PATCH_EDGE, thr + M.PATCH_EDGE, patch[k]) or 0
+		end
+	end
+	-- middle Relief steps (PLAINS_RELIEF, RELIEF_BEND; both neutral at Gentle and Mountainous, which keep this path's
+	-- arithmetic exactly)
+	local keep = preset.flatKeep or 1
+	local plains = (preset.uplands or 1) > 0 and 1 - (1 - M.PLAINS_RELIEF[relief]) * keep or 1
+	local bend = M.RELIEF_BEND[relief] * keep
+	local function onLand(k) return not sea[k] and not water[k] end
+	local p99 = grid.percentile(raw, w, h, 0.99, onLand)
+	if ctx then ctx.tick() end
+	local fac -- per node: the share of the landform's relief kept (plains < 1, hill-country patches 1); nil = all
+	if plains ~= 1 then
+		fac = {}
+		for k = 1, n do
+			fac[k] = plains + (1 - plains) * patchM[k]
+			raw[k] = raw[k] * fac[k]
+		end
+		if ctx then ctx.tick() end
+		p99 = sqrt(p99 * grid.percentile(raw, w, h, 0.99, onLand))
+	end
+	p99 = max(p99, 1e-9) -- the curve below divides by it too (same values as before whenever there is any relief)
+	local s = target / p99
+	-- height above the floodplain base for a landform height r: straight (s r), or curved by bend (x = r / p99:
+	-- target ((1 - bend) x + bend x^2) up to x = 1, its tangent above); unrise is the inverse
+	local function rise(r)
+		if bend == 0 then return s * r end
+		local x = r / p99
+		if x <= 1 then return target * x * (1 - bend + bend * x) end
+		return target * (1 + (1 + bend) * (x - 1))
+	end
+	local function unrise(z)
+		if bend == 0 then return z / s end
+		-- Overall height 0 % (target 0): rise is 0 for every r, so 0 is its inverse and the pass slopes lie at the beach
+		-- level (z / target gave NaN, and every pass-slope comparison below silently failed)
+		if target <= 0 then return 0 end
+		local y = z / target
+		if y <= 1 then return p99 * (sqrt((1 - bend) * (1 - bend) + 4 * bend * y) - (1 - bend)) / (2 * bend) end
+		return p99 * (1 + (y - 1) / (1 + bend))
+	end
 	local H = {}
 	for k = 1, n do
 		if ctx and k % 8192 == 0 then ctx.tick() end
-		if sea[k] then H[k] = 0 else H[k] = base[k] + s * raw[k] end
+		if sea[k] then H[k] = 0 else H[k] = base[k] + rise(raw[k]) end
 	end
 
 	-- 2b. raised ground (plateaus, shapes.lua lift): added as a block, scaled to the Relief target. Rivers are not
@@ -225,8 +318,8 @@ function M.build(shape, hydro, paths, fpNode, g, settings, ctx)
 		end
 	end
 
-	-- 3. slope limit (lowers only; water and sea nodes are fixed)
-	local sLimit = min(1.0, M.SLOPE_LIMIT[relief] * (preset.relief > 1 and 1.15 or 1))
+	-- 3. slope limit (lowers only; water and sea nodes are fixed); preset.slope: the type's own factor on it
+	local sLimit = min(1.0, M.SLOPE_LIMIT[relief] * (preset.slope or (preset.relief > 1 and 1.15 or 1)))
 	local dO, dD = sLimit * cell, sLimit * cell * 1.41421356
 	local function slopeLimit(sweeps)
 		for _ = 1, sweeps do
@@ -279,23 +372,13 @@ function M.build(shape, hydro, paths, fpNode, g, settings, ctx)
 	--     hill country, plus steep ground (filled in after the slope limit).
 	local rough = {}
 	do
-		local amp = M.HILL_AMP[relief] * (preset.hills or 1) * (tune.hillHeight or 1) * target
-			/ (M.RELIEF_P99[relief] * preset.relief)
-		local pn = noise.perlin(noise.derive(settings.seed, "hillpatch"))
+		local amp = M.HILL_AMP[relief] * (preset.hills or 1) * (tune.hillHeight or 1) * target / designed
 		local hn = noise.perlin(noise.derive(settings.seed, "hills"))
-		local patch = {}
-		for k = 1, n do
-			if ctx and k % 2048 == 0 then ctx.tick() end
-			local x, y = ((k - 1) % w) * cell, floor((k - 1) / w) * cell
-			patch[k] = noise.fbm(pn, x / M.PATCH_WL, y / M.PATCH_WL, 3, 0.5)
-		end
-		local cover = M.HILL_COVER[relief] * (preset.hillCover or 1) * (tune.hills or 1)
-		local thr = grid.percentile(patch, w, h, max(0, min(1, 1 - cover)), function(k) return not sea[k] end)
 		for k = 1, n do
 			if ctx and k % 2048 == 0 then ctx.tick() end
 			rough[k] = 0
 			if not sea[k] and not water[k] then
-				local m = cover > 0.001 and smoothstep(thr - M.PATCH_EDGE, thr + M.PATCH_EDGE, patch[k]) or 0
+				local m = patchM[k] -- the patches made in step 2
 				if m > 0 then
 					local x, y = ((k - 1) % w) * cell, floor((k - 1) / w) * cell
 					-- 4 octaves: the finest (HILL_WL / 8) still spans 2+ coarse cells; finer texture is detail.lua's job
@@ -310,9 +393,104 @@ function M.build(shape, hydro, paths, fpNode, g, settings, ctx)
 	end
 	slopeLimit(1)
 
-	-- 4. lakes on the river network
+	-- 3c. strait banks (Sea Strait only: shape.plain / shape.bluff, shapes.lua; DESIGN 23), measured from the coast
+	--     (coastDist; the water line lies about half a cell beyond the last land node). The shore plain is a cap, like a
+	--     floodplain: flat from the water to its width, then a valley side; it only lowers. Around a narrows the land is
+	--     a set ramp: up to the bank top, then rising at the Relief's pass grade (a band around the top let small valleys
+	--     through, 3-10 % over 100 m at Gentle), blended into the land around (bluff weight 1 within 1.55 km of the
+	--     channel, 0 beyond 2.3 km). Both after the hill country (which would roughen them; no rock texture there
+	--     either) and before the lakes and the river valleys, which still cut into them (but keep the bluff beside their
+	--     floodplains, step 5: bluffT, bluffW).
+	local bluffT, bluffW
+	-- (the bank's profile beside a floodplain or an estuary at level b, e metres from its edge: up to the bank top over
+	-- RIVER_BANK_AT, then the pass grade; set below. Over the strait's own 100 m it left 6 m steps where a ship river's
+	-- bend met the graded bank, review round 3)
+	local bluffRamp
+	if shape.coastDist and (shape.plain or shape.bluff) then
+		local cd = shape.coastDist
+		local plain, bluff = shape.plain or {}, shape.bluff or {}
+		local zone = M.SIDE_ZONE * (preset.valley or 1) * (tune.valley or 1)
+		local sideSlope = M.SIDE_SLOPE[relief]
+		local grade = passes.TARGET[relief] * passes.MARGIN
+		local top, at = shape.bluffTop or 18, M.STRAIT_BLUFF_AT
+		bluffRamp = function(b, e)
+			b = max(b, M.BEACH)
+			local at2 = M.RIVER_BANK_AT
+			if e <= at2 then return b + (max(b, top) - b) * smoothstep(0, at2, e) end
+			return max(b, top) + grade * (e - at2)
+		end
+		local half = 0.5 * cell
+		-- beyond the bank top the ramp follows a smoothed coast distance: the distance field has a crease along a
+		-- headland's middle (its medial line), which the ramp drew as a straight ridge line (look review 2026-10-12);
+		-- within a cell of the top the distance stays exact
+		local cdS
+		if shape.bluff then
+			-- (one 5x5 box, as running sums along the rows and then the columns, only over the bounding box of the bluff
+			-- zones: the whole grid cost 0.3 s on a 24 x 8 km map; three 3x3 passes, as first built, smooth as much
+			-- (both about 1.4 cells) at twice the cost, review round 3)
+			cdS = {}
+			local i0, i1, j0, j1 = w, -1, h, -1
+			for k in pairs(shape.bluff) do
+				local i, j = (k - 1) % w, floor((k - 1) / w)
+				if i < i0 then i0 = i end
+				if i > i1 then i1 = i end
+				if j < j0 then j0 = j end
+				if j > j1 then j1 = j end
+			end
+			i0, i1, j0, j1 = max(0, i0 - 3), min(w - 1, i1 + 3), max(0, j0 - 3), min(h - 1, j1 + 3)
+			local function cdAt(k) local v = cd[k]; return v < math.huge and v or 0 end
+			local tmp = {}
+			for j = j0, j1 do
+				local row = j * w + 1
+				local s_, cnt = 0, 0
+				for i = i0, min(i1, i0 + 1) do s_, cnt = s_ + cdAt(row + i), cnt + 1 end
+				for i = i0, i1 do
+					if i + 2 <= i1 then s_, cnt = s_ + cdAt(row + i + 2), cnt + 1 end
+					if i - 3 >= i0 then s_, cnt = s_ - cdAt(row + i - 3), cnt - 1 end
+					tmp[row + i] = s_ / cnt
+				end
+			end
+			if ctx then ctx.tick() end
+			for i = i0, i1 do
+				local s_, cnt = 0, 0
+				for j = j0, min(j1, j0 + 1) do s_, cnt = s_ + tmp[j * w + i + 1], cnt + 1 end
+				for j = j0, j1 do
+					if j + 2 <= j1 then s_, cnt = s_ + tmp[(j + 2) * w + i + 1], cnt + 1 end
+					if j - 3 >= j0 then s_, cnt = s_ - tmp[(j - 3) * w + i + 1], cnt - 1 end
+					local k = j * w + i + 1
+					cdS[k] = (sea[k] or cd[k] < at + cell) and cdAt(k) or s_ / cnt
+				end
+			end
+			if ctx then ctx.tick() end
+		end
+		for k = 1, n do
+			if ctx and k % 8192 == 0 then ctx.tick() end
+			if not sea[k] and not water[k] and cd[k] < math.huge then
+				local d = max(0, cd[k] - half)
+				local wp = plain[k]
+				if wp then
+					local t = valleyTarget(d - wp, M.BEACH + M.PLAIN_RISE * min(1, d / wp), zone, sideSlope, sLimit)
+					if t < H[k] then H[k] = t end
+					rough[k] = rough[k] * smoothstep(wp, wp + 0.5 * zone, d)
+				end
+				local wb = bluff[k]
+				if wb then
+					local t = d <= at and M.BEACH + (top - M.BEACH) * smoothstep(0, at, d)
+						or top + grade * max(0, cdS[k] - half - at)
+					H[k] = H[k] + (t - H[k]) * wb
+					rough[k] = rough[k] * (1 - wb)
+					bluffT, bluffW = bluffT or {}, bluffW or {}
+					bluffT[k], bluffW[k] = H[k], wb
+				end
+			end
+		end
+	end
+
+	-- 4. lakes on the river network (ctx.tick pauses below: this part and the valley seeds ran ~55 ms without one,
+	-- 2026-10-13, over the Studio's frame check)
 	local kind = {}
 	for k = 1, n do kind[k] = sea[k] and 1 or 0 end
+	if ctx then ctx.tick() end
 	local want = floor(M.LAKES_PER_WATER[settings.water] * preset.lakes * (tune.lakes or 1) + 0.5)
 	-- no lakes on ship rivers: the wide channel runs straight through and the lake reads as a blob on the river
 	-- (run 5, Delta Lowlands); lakes sit on the smaller rivers
@@ -330,8 +508,10 @@ function M.build(shape, hydro, paths, fpNode, g, settings, ctx)
 			end
 		end
 	end
+	if ctx then ctx.tick() end
 	local cands = {}
 	for _, d in ipairs(hydro.depressions) do
+		if ctx then ctx.tick() end
 		if d.area >= M.LAKE_MIN_AREA then
 			local onRiver = d.spill > 0 and water[d.spill]
 			if not onRiver then
@@ -342,7 +522,8 @@ function M.build(shape, hydro, paths, fpNode, g, settings, ctx)
 			-- a pit next to the coast would merge with the river mouth or the sea into one shapeless water body
 			if onRiver then
 				local rc = math.ceil(M.LAKE_SEA_GAP / cell)
-				for _, k in ipairs(d.nodes) do
+				for q, k in ipairs(d.nodes) do
+					if ctx and q % 64 == 0 then ctx.tick() end -- a large pit's scan alone ran 37-62 ms
 					local i, j = (k - 1) % w, floor((k - 1) / w)
 					for jj = max(0, j - rc), min(h - 1, j + rc), 2 do
 						for ii = max(0, i - rc), min(w - 1, i + rc), 2 do
@@ -358,13 +539,24 @@ function M.build(shape, hydro, paths, fpNode, g, settings, ctx)
 					if nearShip[k] then onRiver = false break end
 				end
 			end
+			-- preset.lakeInland (Sea Strait, DESIGN 23): no lake on the map border, where the edge would cut it off (its
+			-- banks have no edge outlets, so dips against an inland edge or at an inflow became lakes; review 2026-10-12,
+			-- round 2). Opt-in: lakes of the accepted maps stay as they are.
+			if onRiver and preset.lakeInland then
+				for _, k in ipairs(d.nodes) do
+					local i, j = (k - 1) % w, floor((k - 1) / w)
+					if i == 0 or j == 0 or i == w - 1 or j == h - 1 then onRiver = false break end
+				end
+			end
 			if onRiver then cands[#cands + 1] = d end
 		end
 	end
 	table.sort(cands, function(a, b) return a.area > b.area end)
+	if ctx then ctx.tick() end
 	local lakes = {}
 	local filled, B = f.filled, shape.B
 	for idx = 1, min(want, #cands) do
+		if ctx then ctx.tick() end
 		local d = cands[idx]
 		-- keep the deepest part of a large pit: a lake, not a flooded plain
 		local maxNodes = floor(M.LAKE_MAX_AREA / (cell * cell))
@@ -378,6 +570,23 @@ function M.build(shape, hydro, paths, fpNode, g, settings, ctx)
 				if filled[k] - B[k] >= thr then core[#core + 1] = k end
 			end
 			d = { nodes = core, area = #core * cell * cell }
+		end
+		-- preset.lakeOpen (Sea Strait, DESIGN 23): tails one or two nodes wide become land (a morphological opening: keep
+		-- the nodes whose four neighbours are lake, then grow them back by one node inside the pit). The shore smoothing
+		-- lifts such a tail to about 0 m and cut a pond off its end (8 km maps, 2026-10-12). Opt-in: lake shapes of the
+		-- accepted maps stay as they are.
+		if preset.lakeOpen then
+			local member, coreSet, opened = {}, {}, {}
+			for _, k in ipairs(d.nodes) do member[k] = true end
+			for _, k in ipairs(d.nodes) do
+				if member[k - 1] and member[k + 1] and member[k - w] and member[k + w] then coreSet[k] = true end
+			end
+			for _, k in ipairs(d.nodes) do
+				if coreSet[k] or coreSet[k - 1] or coreSet[k + 1] or coreSet[k - w] or coreSet[k + w] then
+					opened[#opened + 1] = k
+				end
+			end
+			d = { nodes = opened, area = #opened * cell * cell }
 		end
 		-- drop fragments smaller than a lake (they would read as puddles)
 		local inLake = {}
@@ -445,6 +654,9 @@ function M.build(shape, hydro, paths, fpNode, g, settings, ctx)
 	-- 5. valleys around the final courses and the lakes
 	local function newSeeds() return { n = 0, x = {}, y = {}, off = {}, node = {}, fp = {} } end
 	local seeds, estSeeds = newSeeds(), newSeeds()
+	-- (Sea Strait: the channels alone too, for the graded banks below: there a floodplain is narrowed, but never off the
+	-- channel itself)
+	local chanSeeds = bluffT and newSeeds() or nil
 	estSeeds.half = {}
 	local ss = M.SIDE_SLOPE[relief]
 	local function addTo(t, x, y, off, fp)
@@ -461,6 +673,7 @@ function M.build(shape, hydro, paths, fpNode, g, settings, ctx)
 	local every = max(1, floor(cell * 0.5 / 8))
 	local vw = (preset.valley or 1) * (tune.valley or 1) -- map type (and setting): how broad river valleys are
 	for _, p in ipairs(paths) do
+		if ctx then ctx.tick() end
 		-- the valley floor follows the river's centreline, wide enough for its whole meander belt (valley walls
 		-- do not follow every bend)...
 		local c = p.centre
@@ -495,6 +708,13 @@ function M.build(shape, hydro, paths, fpNode, g, settings, ctx)
 		for i = 1, #p.x, every do
 			local wd = p.w[i]
 			addSeed(p.x[i], p.y[i], wd * 0.5 + 30, p.fp[i])
+			-- (only where the channel runs through the graded banks: usually nowhere, and the pass is skipped)
+			if chanSeeds then
+				local ci, cj = floor(p.x[i] / cell + 0.5), floor(p.y[i] / cell + 0.5)
+				if ci >= 0 and cj >= 0 and ci < w and cj < h and (bluffW[cj * w + ci + 1] or 0) > 0 then
+					addTo(chanSeeds, p.x[i], p.y[i], wd * 0.5 + 30, p.fp[i])
+				end
+			end
 		end
 	end
 	for _, l in ipairs(lakes) do
@@ -503,9 +723,12 @@ function M.build(shape, hydro, paths, fpNode, g, settings, ctx)
 			addSeed(x, y, 40 + 60 * (1 + vary(x / 1200, y / 1200 + 80)), M.FP_LAKE)
 		end
 	end
+	if ctx then ctx.tick() end
 	if seeds.n > 0 then
 		local zone = M.SIDE_ZONE * vw
 		local best, cost = grid.nearestSeed(w, h, cell, seeds, nil, ctx)
+		local bestC, costC
+		if chanSeeds and chanSeeds.n > 0 then bestC, costC = grid.nearestSeed(w, h, cell, chanSeeds, 2000, ctx) end
 		for k = 1, n do
 			if ctx and k % 8192 == 0 then ctx.tick() end
 			local sId = best[k]
@@ -515,6 +738,19 @@ function M.build(shape, hydro, paths, fpNode, g, settings, ctx)
 					-- floodplains are not machine-flat: old channels and levees, 0 .. +0.7 m (never lower)
 					local x, y = ((k - 1) % w) * cell, floor((k - 1) / w) * cell
 					t = t + 0.35 * (1 + vary(x / 350 + 7, y / 350 - 3))
+				end
+				-- (Sea Strait: in a narrows' graded banks a floodplain is at most a fifth as wide (never off the channel)
+				-- and beside it the land rises to the bank (bluffRamp), so a river's broad valley does not flatten the
+				-- bluff where a bridge lands: on 2 km strips crossed the short way a ship river's mouth lies within a
+				-- kilometre of the narrows, and its floodplain, 400-500 m either side, lowered the bluff from 20 m to
+				-- 1-4 m, review 2026-10-13, round 3)
+				if bluffT and bluffT[k] then
+					local e, fp = cost[k] + 0.8 * bluffW[k] * max(0, seeds.off[sId] - 60), seeds.fp[sId]
+					if costC and costC[k] < e then e, fp = costC[k], chanSeeds.fp[bestC[k]] end
+					if e > 0 then
+						local keep = min(bluffT[k], bluffRamp(fp, e))
+						if keep > t then t = t + (keep - t) * bluffW[k] end
+					end
 				end
 				if t < H[k] then
 					H[k] = t
@@ -540,6 +776,13 @@ function M.build(shape, hydro, paths, fpNode, g, settings, ctx)
 			if sId > 0 and kind[k] == 0 then
 				local e = cost[k] - estSeeds.half[sId]
 				local t = valleyTarget(e, estSeeds.fp[sId], zone, ss, sLimit)
+				if bluffT and bluffT[k] then -- (the bluff beside an estuary, as beside a floodplain)
+					local e2 = e + 0.8 * bluffW[k] * max(0, estSeeds.half[sId] - 60)
+					if e2 > 0 then
+						local keep = min(bluffT[k], bluffRamp(estSeeds.fp[sId], e2))
+						if keep > t then t = t + (keep - t) * bluffW[k] end
+					end
+				end
 				if t < H[k] then
 					H[k] = t
 					if t < 0 then kind[k] = 3 end
@@ -553,8 +796,13 @@ function M.build(shape, hydro, paths, fpNode, g, settings, ctx)
 	--     the hillsides rise from it like from any valley (beyond a flat floor of PASS_FLOOR m), lowering the land
 	--     only where that gives a lower surface. It comes after the river valleys, so the floor also descends
 	--     gently into the valleys it crosses, and after the smoothing, which would lift the floor. The relief scale
-	--     s is the one measured in step 2, so the grade holds in metres.
-	local corridors = passes.build(H, g, shape.corridors, relief, M.BEACH)
+	--     s is the one measured in step 2 (rise / unrise with the curve), so the grade holds in metres.
+	--     The floor is graded on the lowest ground across its width (passes.profile), so it never runs on the rim of a
+	--     side valley. Alpine did so from the start (2026-10-11); every curved step since 2026-10-12, where the curve
+	--     lowers low ground beside a pass axis more than the axis (Mountain Range seed 3: 4.5 / 5.0 / 6.5 % on the
+	--     3.25 / 4 / 5 % passes); every pass at every step since 2026-10-13 (owner, run 9, REVIEW B9: Mountain Range at
+	--     Gentle and Mountainous ran 5-8 % over target on average, single passes up to a third).
+	local corridors = passes.build(H, g, shape.corridors, relief, M.BEACH, M.PASS_FLOOR * 0.5)
 	local calm -- pass-floor factor per node (0 on the floor, 1 away from it), only where passes exist
 	if #corridors > 0 then
 		-- seeds on the axis; each node takes the floor height of its nearest axis point (plain distance, as for the
@@ -568,7 +816,7 @@ function M.build(shape, hydro, paths, fpNode, g, settings, ctx)
 					local id = ps.n + 1
 					ps.n = id
 					ps.x[id], ps.y[id], ps.node[id] = c.x[q], c.y[q], j * w + i + 1
-					ps.raw[id] = max(0, (c.z[q] - M.BEACH) / s)
+					ps.raw[id] = bend == 0 and max(0, (c.z[q] - M.BEACH) / s) or unrise(max(0, c.z[q] - M.BEACH))
 					ps.off[id] = M.PASS_FLOOR * 0.5 * (1 + 0.35 * vary(c.x[q] / 900 + 40, c.y[q] / 900))
 				end
 			end
@@ -584,7 +832,8 @@ function M.build(shape, hydro, paths, fpNode, g, settings, ctx)
 				local beyond = max(0, pCost[k])
 				local dist = beyond
 				if hillShape ~= 1 and dist > 0 then dist = M.HILL_D0 * exp(hillShape * log(dist / M.HILL_D0)) end
-				local t = M.BEACH + s * (ps.raw[sId] + M.HILL * U[k] * headSlope * dist)
+				if fac then dist = dist * fac[k] end -- plains keep their share of the relief on pass slopes too
+				local t = M.BEACH + rise(ps.raw[sId] + M.HILL * U[k] * headSlope * dist)
 				-- the floor stays smooth for tracks and stations; rock detail returns on the slopes
 				local c = min(1, beyond / M.PASS_CALM)
 				calm[k] = c * c * (3 - 2 * c)
@@ -617,6 +866,7 @@ function M.build(shape, hydro, paths, fpNode, g, settings, ctx)
 		end
 	end
 	local shelf = preset.shelf
+	local shelfDepth = shelf.steep and {} or nil -- (shelf.steep: deeper water at the shore after its smoothing, step 7)
 	if coast.n > 0 then
 		local _, dist = grid.nearestSeed(w, h, cell, coast, nil, ctx)
 		for k = 1, n do
@@ -624,6 +874,7 @@ function M.build(shape, hydro, paths, fpNode, g, settings, ctx)
 			if kind[k] == 1 then
 				local d = dist[k] < math.huge and dist[k] or 1e5
 				H[k] = -min(shelf.max, 1.0 + shelf.slope * d)
+				if shelfDepth then shelfDepth[k] = H[k] end
 			end
 		end
 	else
@@ -663,6 +914,30 @@ function M.build(shape, hydro, paths, fpNode, g, settings, ctx)
 	end
 	for _ = 1, 2 do
 		grid.blur(H, w, h, 1, function(k) return not zone[k] end, ctx)
+	end
+	-- preset.shelf.steep (Sea Strait: harbour depth close to the shore, DESIGN 23): the smoothing above blends up to three
+	-- cells of sea with the land, which on 64 m cells left under 2 m of water 100 m out (2 % slopes under water). The
+	-- smoothed water is made `steep` times deeper, at most as deep as the shelf there: the water line stays where the
+	-- smoothing put it (the sign does not change; it moves by a few metres between nodes), the bottom drops off faster
+	if shelfDepth then
+		local cap = -(1.0 + shelf.slope * cell)
+		for k in pairs(zone) do
+			local v = H[k]
+			if v < 0 then
+				-- only at the sea's shore (lakes and estuaries keep their smoothed banks: a lake shore made deeper left
+				-- one-node puddles beside it)
+				local nearSea = kind[k] == 1
+				if not nearSea then
+					local i, j = (k - 1) % w, floor((k - 1) / w)
+					for jj = max(0, j - 2), min(h - 1, j + 2) do
+						for ii = max(0, i - 2), min(w - 1, i + 2) do
+							if kind[jj * w + ii + 1] == 1 then nearSea = true end
+						end
+					end
+				end
+				if nearSea then H[k] = max(v * shelf.steep, min(v, shelfDepth[k] or cap)) end
+			end
+		end
 	end
 	if ctx then ctx.tick() end
 

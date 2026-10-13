@@ -43,11 +43,10 @@ function data()
 	-- In game (run 8) the screen size was NOT readable here when the stylesheet loads (the window stayed 84vw), so the
 	-- WINDOW SCRIPT reads it when the window opens and gives the window one class per size: "utg-wNN" (normal, NN vw)
 	-- and "utg-xNN" (Larger window), NN = 30 .. 96 in steps of 2. Without a class: the 16:9 shares below.
-	-- placed like the base Statistics and map editor windows: centred, bottom up, clear of the game bar (64 px)
-	-- centred on the screen (owner run 9: the bottom-anchored window sat too low); the 64 px bottom padding keeps it
-	-- clear of the game bar as in the base windows
-	a("#utg.studio.window", { gravity = { 0.5, 0.5 }, anchorPoint = { 0.5, 0.5 }, padding = { 0, 0, 64, 0 },
-		size = { "84vw", "80vh" } })
+	-- Size only: the window script places it (movable, initialX/Y 0.5 = centred in the free space; owner run 7). A
+	-- gravity / anchorPoint here would pin it like the base Statistics window (2026-10-08 .. run 7: not movable).
+	-- 80vh leaves 10vh below a centred window, clear of the 64 px game bar from 640 px screen height up.
+	a("#utg.studio.window", { size = { "84vw", "80vh" } })
 	a("#utg.studio.window!window-expanded", { size = { "96vw", "88vh" } })
 	for share = 30, 96, 2 do
 		a("#utg.studio.window!utg-w" .. share, { size = { share .. "vw", "80vh" } })

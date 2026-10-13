@@ -1,122 +1,128 @@
-<p>A map editor tool with its own window. It builds whole maps the way nature does, with players in mind: rivers first, then the valleys they carved, then the hills and mountains around them, worn down by erosion. The same window can also run any other terrain generator of your map's climate, the game's own or from other mods, with that generator's own settings. You set everything first and the preview runs only when you press <strong>Preview</strong>; nothing touches your map until you press <strong>Apply to map</strong>.</p>
-<p><strong>Map editor only.</strong> This release makes full maps (forests, rock, snow) for the Temperate climate; other climates get the terrain shape only for now. Feedback is very welcome.</p>
-<h2>What it does</h2>
+<p><strong>Terrain built for transport, and a studio to shape it.</strong></p>
+<p>A map-editor window with its own terrain engine, that can also load any vanilla or mod terrain generator. Rivers wind through broad, flat valleys to the sea, mountain ranges have passes a train can climb, and big rivers carry ships while small ones stay easy to bridge.</p>
+<h2>The Studio</h2>
+<p>What it does that the game's own generator window cannot:</p>
 <ul>
-<li><strong>Real drainage:</strong> every valley belongs to a river. Rivers grow downstream, join, meander irregularly and reach the sea or the map edge. Lakes sit on the rivers that feed and drain them.
+<li><strong>Preview on demand:</strong> set everything first, then preview once; the game's window rebuilds after every change. <strong>Apply to map</strong> always uses the settings you see.
 </li>
-<li><strong>Water for every transport mode:</strong> small rivers stay easy to bridge; "ship rivers" are wide and deep enough for ships all the way to the sea. River mouths open into estuaries or deltas, and coasts shelve gently for harbours.
+<li><strong>A Report before you apply:</strong> flat land, rail-grade land, rivers, ship rivers, lakes, pass grades, strait narrows and what to try when a map falls short.
 </li>
-<li><strong>Terrain that tells its history:</strong> wide floodplains, oxbow lakes, drowned river mouths, and hills and mountains cut by spurs and gullies running down their slopes.
+<li><strong>Undo</strong> puts the previous terrain back.
 </li>
-<li><strong>Playable by default, hard if you want:</strong> at Gentle relief most land is buildable and rail-friendly, and flat land stays flat; mountain passes are graded valleys a railway can climb. Mountainous makes steeper, harder maps.
+<li><strong>More control than the game's three sliders:</strong> twelve map types, five Terrain steps, the edge the sea, big river or strait is on (or no sea), and ten sliders with tooltips.
 </li>
-<li><strong>No forced placements:</strong> the tool never reserves sites for airports, harbours or stations.
+<li><strong>Lower tree density:</strong> about half the trees in the same forests, for slower computers.
 </li>
-<li><strong>Full detail:</strong> the final map has the game's full 4 m resolution, with forests, rock and snow drawn by the game's own terrain pass, including the data that town and industry placement uses.
+<li><strong>Any generator of your map's climate,</strong> the game's own included, runs here too with Preview, Undo and the Report's land and slope numbers to compare them.
 </li>
-<li><strong>Preview when you ask for it:</strong> the game's own generator window recomputes after every change. Here you set everything first, which saves a lot of waiting on large maps and slower computers.
+</ul>
+<h2>The terrain engine</h2>
+<ul>
+<li><strong>Rivers first:</strong> the land is shaped around the rivers, so every valley has its river and every river reaches the sea or the map edge.
 </li>
-<li><strong>Any terrain generator in the same window,</strong> with a Report of land and slope numbers to compare them.
+<li><strong>Ship rivers on request:</strong> 120-180 m wide and 5 m deep all the way out. Other rivers stay 18-58 m wide, cheap to bridge.
+</li>
+<li><strong>Passes a railway can climb</strong> on Mountain Range and Alpine: 2.5 % on Gentle up to 6 % on Mountainous, under the game's 8.5 % railway limit (4.0-4.1 % in game on Alpine, for a 4 % target).
+</li>
+<li><strong>Room to build:</strong> Great River Valley at Hilly had 27 % flat land (under 3 % slope) in game, against 11 % on a game-generated map. Rolling Plains and Delta Lowlands are flatter still.
+</li>
+<li><strong>Natural detail:</strong> spurs and gullies on the hillsides, smooth plains and valley floors, lakes on the rivers, oxbow lakes, deltas and estuaries.
+</li>
+<li><strong>Finished by the game's own rules</strong> on Temperate: forests, rock and snow at full 4 m detail.
 </li>
 </ul>
 <h2>Map types</h2>
 <ul>
-<li><strong>Great River Valley:</strong> one big river crosses the map in a broad valley and reaches the sea.
+<li><strong>Great River Valley:</strong> a ship river down a broad valley to the sea.
 </li>
-<li><strong>Delta Lowlands:</strong> a wide, flat coastal plain; the river splits into several channels across a delta.
+<li><strong>Delta Lowlands:</strong> the flattest map, the river split into channels.
 </li>
-<li><strong>Mountain Range with Passes:</strong> the most alpine type: a snow-capped mountain belt (from Hilly up) with two graded passes, foothills on both sides.
+<li><strong>Mountain Range with Passes:</strong> one long range, two railway passes.
 </li>
-<li><strong>Rolling Plains:</strong> inland, gentle swells and a big navigable river.
+<li><strong>Alpine:</strong> snow-capped massifs over hill country, two long passes.
 </li>
-<li><strong>Lake District:</strong> inland hill country with long, narrow lakes strung along the rivers.
+<li><strong>Rolling Plains:</strong> gentle inland country and a ship river.
 </li>
-<li><strong>Large Bays:</strong> a coast cut by two or three deep, sheltered bays with rivers at their heads.
+<li><strong>Lake District:</strong> hills with long lakes along the rivers.
 </li>
-<li><strong>Peninsulas:</strong> a mainland with two or three long peninsulas reaching into the sea.
+<li><strong>Large Bays:</strong> deep bays where ships cross and trains go round.
 </li>
-<li><strong>Island Chain:</strong> islands of different sizes with sounds between them; rivers are rare.
+<li><strong>Peninsulas:</strong> short sea routes, long land routes.
 </li>
-<li><strong>Coastal Region:</strong> a ragged coast with headlands and coves, a coastal plain and hills inland.
+<li><strong>Island Chain:</strong> islands of all sizes, for ships and ferries.
 </li>
-<li><strong>Highland Plateau:</strong> a lowland by the sea, an escarpment and a high plateau cut by river gorges.
+<li><strong>Coastal Region:</strong> a ragged coast, a coastal plain, hills inland.
+</li>
+<li><strong>Highland Plateau:</strong> a lowland, an escarpment, a high plateau.
+</li>
+<li><strong>Sea Strait:</strong> a channel from edge to edge; its narrows (350-400 m) are too wide for the game's automatic town roads, so the big bridges are yours.
 </li>
 </ul>
 <h2>How to use</h2>
-<p><strong>1.</strong> Open the map editor with a <strong>Temperate</strong> map of the size you want (the terrain will be replaced).</p>
-<p><strong>2.</strong> Click the <strong>UTG</strong> button in the mod button strip. The window opens with the settings on the left and the preview on the right. <strong>Larger window</strong> switches to a bigger size and back. The window adapts to your screen and the game's text size; on very wide screens the preview stays roughly square.</p>
-<p><strong>3.</strong> <strong>Settings</strong> tab: <strong>Generator</strong> (this mod's own, or another one), <strong>Map type</strong>, <strong>Relief</strong> (Gentle, Moderate, Hilly, Rugged, Mountainous), <strong>Water</strong> (Dry, Normal, Wet), <strong>Ship rivers</strong> (map type default, None, One, Several), the <strong>side</strong> for the map type's main feature (<strong>Sea side</strong>, <strong>River comes from</strong> or <strong>Rivers flow towards</strong>: Random, North, East, South or West) and <strong>Seed</strong> (same settings and seed give the same map).</p>
-<p><strong>4.</strong> Optional: <strong>Terrain parameters</strong> tab: ten sliders to fine-tune height, hills, surface detail, erosion, coast, rivers, lakes, river bends and valley width (100 % = as designed; <strong>Reset all to 100 %</strong>).</p>
-<p><strong>5.</strong> <strong>Preview</strong> generates the terrain and shows the finished map, coloured by biome (trees and rock appear on the map after Apply). The editor stays usable meanwhile; large maps take up to about half a minute. The <strong>Report</strong> tab lists buildable land, rivers, ship rivers, lakes and passes, with a note if the map could not give what you asked for.</p>
-<p><strong>6.</strong> <strong>When applying: Keep towns / Keep industries,</strong> as in the game's own generator window. Not ticked means they are removed before the new terrain goes in.</p>
-<p><strong>7.</strong> <strong>Apply to map</strong> puts the terrain on the map; <strong>Undo</strong> puts the previous terrain back. Then place towns and industries, save the map and start it with <strong>Play map</strong>.</p>
-<p><strong>Another generator:</strong> choose it under <strong>Generator</strong>. Its own settings appear; change them, press <strong>Preview</strong>, then <strong>Apply to map</strong>. The Report shows the finished map's land and slope numbers so you can compare generators.</p>
-<p>The next step is the filled button; greyed-out buttons cannot act yet. Details on every setting: extended_readme.md in the mod's folder.</p>
-<h2>Good to know</h2>
+<p><strong>1.</strong> <strong>Map Editor</strong> &gt; <strong>Create New Map</strong>: <strong>Temperate</strong>, <strong>Small</strong> or larger, this mod on the <strong>Add Mods</strong> tab.</p>
+<p><strong>2.</strong> Click <strong>UTG</strong> (top left, next to the map layers button), pick a map type and a <strong>Terrain</strong> step (Gentle is the easiest), press <strong>Preview</strong>.</p>
+<p><strong>3.</strong> Read the <strong>Report</strong>; try <strong>New seed</strong> or other settings and Preview again.</p>
+<p><strong>4.</strong> Tick <strong>Keep towns</strong> / <strong>Keep industries</strong> if wanted, then <strong>Apply to map</strong>. Not happy? <strong>Undo</strong>.</p>
+<p><strong>5.</strong> Add towns and industries, save the map and play it from <strong>New Game</strong>.</p>
+<h2>Limits</h2>
 <ul>
-<li>Map editor only. The button is hidden in normal games.
+<li>Map editor only.
 </li>
-<li><strong>Other climates:</strong> on Dry, Subarctic and Tropical maps this mod's generator makes the terrain shape only, without forests and biomes (the window says so).
+<li>Forests, rock and snow on <strong>Temperate</strong> only; other climates get the terrain shape for now.
 </li>
-<li><strong>Undo</strong> restores the terrain shape of the last Apply only: not the trees, and not removed towns or industries.
+<li><strong>Undo</strong> restores the terrain only, not trees or removed towns and industries.
 </li>
-<li><strong>Small maps</strong> (under about 6 km), Dry water and coastal types may give fewer rivers, ship rivers or lakes than asked; the Report says so and suggests what to change.
+<li>Slower than the game's generator: about 12 s to preview, 3 s to apply on a 14 km map.
 </li>
-<li>Large maps take longer to generate and may stutter briefly.
+<li>Few or no rivers on maps under about 6 km.
 </li>
 </ul>
+<p><strong>Guide:</strong> what each setting and slider does to the terrain: extended_readme.md in the mod's folder (from mod.io: Users\Public\mod.io\10640\mods\6433560 on the system drive).</p>
 <h2>Feedback</h2>
-<p>Thank you for trying it! If something looks wrong or fails, please post on the mod page what looked wrong (a screenshot helps), the map size and the settings (they are on the Report tab). If you can, add the tool's files: turn on the mod setting <strong>Debug tools</strong> (in the mod settings before the map editor loads) for a Debug row in the window, then:</p>
-<ul>
-<li><strong>Run test</strong> (Debug row; this mod's generator on Temperate maps) does everything in about half a minute: preview, Apply, export of the map and the log, into the game's heightmaps folder (in the user data folder). It replaces your terrain, so use a spare map.
-</li>
-<li>Or just <strong>Save log</strong>: everything the tool logged this session, as utg_log_&lt;id&gt;.lua in the same folder.
-</li>
-</ul>
+<p>Post on the mod page what looked wrong (a screenshot helps), the map size and the Report's "For:" line. For files to attach, turn on <strong>Debug tools</strong> in this mod's settings (where you add the mod), then press <strong>Save log</strong>, or <strong>Run test</strong> on a spare Temperate map (it replaces the terrain); they go into the game's heightmaps folder.</p>
 <h2>Changes in this version</h2>
 <p><strong>New</strong></p>
 <ul>
-<li>Your own window can now run <strong>any terrain generator</strong> of the map's climate, the game's and other mods', with that generator's own settings, preview on request, Apply, Undo and a Report of land and slope numbers.
+<li><strong>Two map types:</strong> <strong>Alpine</strong> (separate snow-capped massifs over hill country, with two long passes graded for railways) and <strong>Sea Strait</strong> (a sea channel splits the map from edge to edge: long sounds for ships and ferries, and a few narrows of about 350-400 m for big bridges; ships always get through). Twelve map types now.
 </li>
-<li><strong>Keep towns / Keep industries</strong> when applying, like the game's own generator window.
+<li><strong>No sea</strong> where it fits: Sea side <strong>None</strong> on Mountain Range, Alpine and Highland Plateau, and a <strong>Sea</strong> box on Great River Valley (the big river leaves the map instead of reaching the sea).
 </li>
-<li><strong>Choose the side</strong> of the map type's main feature: sea, river source or river outflow.
+<li><strong>Lower tree density</strong> check box: about half the tree models for lower-spec computers; forests stay where they are.
 </li>
-<li>Preview now generates and shows the finished map in one step: Preview, then Apply to map.
-</li>
-<li><strong>Run test</strong>: one click collects everything a bug report needs (Debug row, shown with the new mod setting <strong>Debug tools</strong>; Off by default).
+<li>Tooltips on every Terrain parameter slider, in plain words.
 </li>
 </ul>
 <p><strong>Improved</strong></p>
 <ul>
-<li>Clearer buttons (next step filled, unavailable ones greyed out) and a new layout with a large preview that adapts to screen and text size.
+<li><strong>Relief is now called Terrain</strong>, Hilly is pre-selected, and flat land now shrinks in even steps from Gentle to Mountainous (the middle steps have much more flat land between the hills than before).
 </li>
-<li>A short description under each map type, hints on the settings, shorter texts.
+<li><strong>Mountain Range passes</strong> meet their railway grade at every Terrain step (2.5 % at Gentle up to 6 % at Mountainous), and the rivers behind the range run straight to the far edge.
 </li>
-<li>The Report notes when a map cannot give what you asked for and what to try.
+<li><strong>Apply to map</strong> makes the preview first when you changed a setting, so it never applies an outdated map.
+</li>
+<li>Changing the map type keeps your choices where they still mean the same; Alpine pre-selects Sea side None.
+</li>
+<li>The window can be moved again, and generating no longer stalls the game for a tenth of a second at a time.
+</li>
+<li>The mod description and the in-mod guide are rewritten: what the Studio and the terrain engine give you, and what each setting does to the map.
 </li>
 </ul>
 <p><strong>Fixed</strong></p>
 <ul>
-<li><strong>Trees are back.</strong> Since a game update in October 2026, maps applied with this tool came without forests, rocks and the right ground textures. The tool now finishes the map the way the editor's own "Import biomes" does, which the update did not affect.
+<li><strong>Apply with towns on the map and Keep towns off crashed the game</strong> (Undo could too). Fixed.
 </li>
-<li>Valley width at 0 % no longer skips the valley sides or leaves a stray puddle beside a lake.
+<li>Short ship rivers could run in straight lines with sharp corners; they now bend like the others.
 </li>
-<li>Surface detail and Erosion at maximum on Mountainous no longer dig puddles into low land.
-</li>
-<li>A failed Apply or Undo could leave the buttons stuck; they now recover, and a failed Undo can be retried.
-</li>
-<li>Closing and reopening the window no longer re-runs the last preview.
-</li>
-<li>Switching generator no longer keeps an old status or a running generation.
+<li>With some GUI mods active (mods that replace the game's window component), opening the window could crash the game. The window now always builds on the game's own component.
 </li>
 </ul>
 <h2>Planned</h2>
 <ul>
-<li><strong>Other climates:</strong> the finishing pass (forests, biomes, rock and snow) for Dry, Subarctic and Tropical maps.
+<li>Forests, rock and snow for Dry, Subarctic and Tropical maps, and map types made for them (Fjord Coast, Mesa Country, Volcanic Islands).
 </li>
-<li><strong>Climate map types:</strong> Fjord Coast (Subarctic), Mesa Country (Dry), Volcanic Islands (Tropical).
-</li>
-<li><strong>Undo with trees,</strong> and faster generation on the largest maps.
+<li>Undo that also brings back the trees, and faster generation on the largest maps.
 </li>
 </ul>
+<p><strong>AI Tool-Use</strong></p>
+<p>Claude Code was used in the development of this mod. Framework, approach, testing, review, etc completed by myself. Significant effort made to ensure performance, safety and compatibility with the game and other mods (for example, compatibility even with mods that replace the games own window component for their own functions).</p>
+<p>Feedback, bug reports, feature requests, etc are all welcome. I'll do my best to address them. Thanks!</p>

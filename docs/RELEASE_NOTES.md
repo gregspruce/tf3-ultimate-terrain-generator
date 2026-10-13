@@ -8,6 +8,13 @@ mod.io gets the new description, summary and cover). The full player-facing list
 mod.io version label: always "1.0" (the game's upload form has no version setting), so each changelog text starts
 with the update's name.
 
+## Revision 3 (update of revision 2; mod.io 6433560)
+Paste into the Changelog field:
+
+```
+Update 3: Two new map types: Alpine (snow-capped massifs with long railway-graded passes) and Sea Strait (a sea channel splits the map, with long sounds for ships and narrows of about 350-400 m for big bridges). No sea where it fits: Sea side None on Mountain Range, Alpine and Highland Plateau, and a Sea box on Great River Valley. New Lower tree density check box for lower-spec computers. Relief is now called Terrain, Hilly is pre-selected and flat land shrinks in even steps from Gentle to Mountainous. Mountain Range passes meet their railway grade at every step. Apply to map makes the preview first when settings changed; tooltips on every Terrain parameter; the window can be moved again; smoother generating. Fixed: Apply (or Undo) with towns on the map could crash the game; short ship rivers ran straight; some GUI mods could make the window crash the game. New description and guide.
+```
+
 ## Revision 2 (update of the first release, revision 1; mod.io 6433560)
 Paste into the Changelog field:
 

@@ -9,6 +9,8 @@ MEASURED (on every 2nd node, i.e. an 8 m grid; slopes by central differences)
   (water patches under 3200 m^2 that no river, lake or sea explains, which should be 0).
   corridors (mountain passes, passes.lua): along each route on the final heights, the summit height and the
   steepest grade over any 100 m (about a train length; bridges over water count as level).
+  strait (Sea Strait, 2026-10-12): the width of each narrows and the narrowest crossing at the water line, and whether
+  ships pass end to end (straitStats). The strait is neither a river nor a ship river.
 ]]
 
 local M = {}
@@ -91,7 +93,107 @@ local function corridorStats(H, Wf, Hf, c)
 	return { summit = summit, grade = steep, length = s[n], target = c.target }
 end
 
--- coarse = { g, kind } (optional): open-sea cells are known big water, so the puddle flood skips the sea
+--[[ Sea Strait: a section every 25 m along the strait's axis (shapes.lua out.strait; it follows the water) on the final
+  heights. Across each section (nearest node, 4 m steps, at most WALK m each side): the water-line width and the
+  navigable width (>= 2 m deep) of the water run through the axis point. A walk that leaves the map in water is open
+  sea (the strait's ends; no crossing there). Each narrows is the narrowest section within 1 km of the designed one,
+  refined by oblique lines (+-30 degrees, +-200 m along the axis, 2 m steps on interpolated heights: a section across a
+  curving channel overstated it by up to 9 m). Returns the narrows, the narrowest crossing anywhere, and whether ships
+  pass end to end: every section's axis point in water >= 2 m deep with at least SHIP_W metres of such water around it. ]]
+local WALK, SHIP_W = 1200, 100
+local function straitStats(H, Wf, Hf, st, ctx)
+	local x, y, n = st.x, st.y, #st.x
+	local W, Hm = (Wf - 1) * 4, (Hf - 1) * 4
+	local function at(px, py)
+		if px < 0 or py < 0 or px > W or py > Hm then return nil end
+		return H[floor(py / 4 + 0.5) * Wf + floor(px / 4 + 0.5) + 1]
+	end
+	local width, sections, bad, minNav = {}, 0, 0, math.huge
+	for q = 1, n do
+		local px, py = x[q], y[q]
+		local h0 = at(px, py)
+		if h0 ~= nil then
+			sections = sections + 1
+			local a, b = max(1, q - 8), min(n, q + 8) -- (the direction over +-200 m: the headlands bend the axis)
+			local tx, ty = x[b] - x[a], y[b] - y[a]
+			local tl = max(1e-9, sqrt(tx * tx + ty * ty))
+			local nx, ny = -ty / tl, tx / tl
+			local wl, nav, open = 0, 0, false
+			for sg = -1, 1, 2 do
+				local s, navRun = 0, h0 <= -2
+				while s < WALK do
+					s = s + 4
+					local h = at(px + sg * nx * s, py + sg * ny * s)
+					if h == nil then open = true break end
+					if navRun and h > -2 then navRun = false; nav = nav + s - 4 end
+					if h >= 0 then break end
+				end
+				if navRun then nav = nav + s end
+				wl = wl + s
+			end
+			if h0 >= 0 then wl = 0 end
+			width[q] = (open or wl >= 2 * WALK) and math.huge or wl
+			if h0 > -2 or nav < SHIP_W then bad = bad + 1 end
+			if nav < minNav then minNav = nav end
+			if ctx and q % 64 == 0 then ctx.tick() end
+		end
+	end
+	local narrowest = math.huge
+	for q = 1, n do if width[q] and width[q] < narrowest then narrowest = width[q] end end
+	-- the water-line width of the line through (px, py) along +-(dx, dy) (heights interpolated, the water line between
+	-- two samples); nil when the point is land or the line leaves the map or the walk in water
+	local function hAt(px, py)
+		if px < 0 or py < 0 or px > W or py > Hm then return nil end
+		local fx, fy = px / 4, py / 4
+		local i, j = min(Wf - 2, floor(fx)), min(Hf - 2, floor(fy))
+		local a, b = fx - i, fy - j
+		local k = j * Wf + i + 1
+		return (H[k] * (1 - a) + H[k + 1] * a) * (1 - b) + (H[k + Wf] * (1 - a) + H[k + Wf + 1] * a) * b
+	end
+	local function crossing(px, py, dx, dy)
+		local h0 = hAt(px, py)
+		if h0 == nil or h0 >= 0 then return nil end
+		local w = 0
+		for sg = -1, 1, 2 do
+			local s, prev = 0, h0
+			while true do
+				s = s + 2
+				if s > WALK then return nil end
+				local h = hAt(px + sg * dx * s, py + sg * dy * s)
+				if h == nil then return nil end
+				if h >= 0 then w = w + s - 2 + 2 * prev / (prev - h); break end
+				prev = h
+			end
+		end
+		return w
+	end
+	local narrows = {}
+	local r = floor(1000 / (st.step or 25) + 0.5)
+	for k, idx in ipairs(st.narrows or {}) do
+		local m, qm = math.huge, nil
+		for q = max(1, idx - r), min(n, idx + r) do if width[q] and width[q] < m then m, qm = width[q], q end end
+		if qm then
+			local a, b = max(1, qm - 8), min(n, qm + 8)
+			local tx, ty = x[b] - x[a], y[b] - y[a]
+			local base = math.atan2(tx, -ty) -- the section's normal
+			for q = max(1, qm - 8), min(n, qm + 8) do
+				for da = -30, 30, 5 do
+					local an = base + math.rad(da)
+					local c = crossing(x[q], y[q], math.cos(an), math.sin(an))
+					if c and c < m then m = c end
+				end
+			end
+			if ctx then ctx.tick() end
+		end
+		narrows[k] = m
+		if m < narrowest then narrowest = m end
+	end
+	return { narrows = narrows, narrowest = narrowest, pass = sections > 0 and bad == 0, badSections = bad,
+		sections = sections, minNav = minNav }
+end
+
+-- coarse = { g, kind [, strait] } (optional): open-sea cells are known big water, so the puddle flood skips the sea;
+-- strait: the Sea Strait's axis (shapes.lua out.strait), measured by straitStats
 function M.build(H, Wf, Hf, paths, lakes, ctx, corridors, coarse)
 	local S = 2
 	-- slope statistics: every 8 m up to ~12 km maps, every 16 m above (same measure, fewer samples)
@@ -223,8 +325,10 @@ function M.build(H, Wf, Hf, paths, lakes, ctx, corridors, coarse)
 
 	local corr = {}
 	for _, c in ipairs(corridors or {}) do corr[#corr + 1] = corridorStats(H, Wf, Hf, c) end
+	local strait = (coarse and coarse.strait) and straitStats(H, Wf, Hf, coarse.strait, ctx) or nil
 
 	return {
+		strait = strait,
 		landShare = land / total, waterShare = water / total,
 		flat = c3 / L, railable = c85 / L, steep = c25 / L, verySteep = cSteep / L,
 		heightMedian = q(0.5), heightP99 = q(0.99), heightMax = nh > 0 and hmax or 0,
@@ -252,6 +356,17 @@ function M.format(r)
 				c.length / 1000, c.summit, 100 * c.grade, 100 * c.target)
 		end
 		lines[#lines + 1] = "passes: " .. table.concat(parts, "; ")
+	end
+	-- Sea Strait (not a river: its water counts in neither rivers nor ship rivers)
+	local st = r.strait
+	if st then
+		local ws = {}
+		for k, v in ipairs(st.narrows) do ws[k] = v < math.huge and string.format("%.0f m", v) or "open" end
+		local narrowest = st.narrowest < math.huge and string.format("%.0f m", st.narrowest) or "over 2.4 km"
+		lines[#lines + 1] = string.format("strait: %d narrows (%s across at the water line), narrowest crossing %s; "
+			.. "ships pass end to end: %s", #st.narrows, table.concat(ws, ", "), narrowest,
+			st.pass and "yes" or string.format("no (%d of %d sections under 100 m wide at 2 m deep)", st.badSections,
+				st.sections))
 	end
 	-- settings the map could not satisfy (pipeline sets shipsAsked and lakesWanted)
 	local asked = r.shipsAsked

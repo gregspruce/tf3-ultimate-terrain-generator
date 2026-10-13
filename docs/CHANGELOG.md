@@ -1,6 +1,245 @@
 # Changelog - Ultimate Terrain Generator
 
-Format: [Keep a Changelog](https://keepachangelog.com/). Last Updated: 2026-10-09 (update prep: revision 2, shipped docs reviewed).
+Format: [Keep a Changelog](https://keepachangelog.com/). Last Updated: 2026-10-13 (released revision 3; earlier: description and guide, revision 3 prepared; earlier: runs 10-12; earlier: newcomer guide, Studio crash guard; earlier: Sea Strait; earlier: Lower tree density, Apply refresh, Mountain Range passes; earlier: run 9: Forests verified in game; earlier 2026-10-13: "Terrain" label, flat land steps evenly; earlier 2026-10-12: Hilly pre-selected, Sea None on Great River Valley, Forests; earlier: run 7: crash on Apply with towns fixed and confirmed in game; window movable again; short ship rivers bend now).
+
+## [Released] revision 3 - 2026-10-13 - mod.io 6433560
+- Uploaded through the game's Mod Hub as an update of mod.io 6433560; release tag `r3` in the public repository.
+  Contents: every [Unreleased] entry below down to revision 2 (Alpine and Sea Strait map types, Sea side None, the
+  Terrain setting with Hilly pre-selected and even flat-land steps, Lower tree density, Apply making the preview
+  first, Mountain Range passes on target, slider tooltips, the crash fixes, the new description and guide).
+- The upload reported a partial failure, as for revision 2: one server error at the start (the console build) and
+  a timeout while uploading the gallery. The mod file arrived intact: the mod.io download equals the release byte
+  for byte.
+
+## [Unreleased] - 2026-10-13 (late) - mod description and guide: the middle ground; revision 3 prepared
+- **Mod description (readme, shown on mod.io and in the game's mod browser)** rewritten again, between the newcomer
+  text and the earlier detailed one (the author's request): what the Studio does that the game's own generator
+  window cannot (preview on demand, a Report before applying, Undo, map types and sliders, Lower tree density, any
+  generator), what the terrain engine is built for (rivers first, ship rivers, passes a railway can climb, room to
+  build, natural detail), the twelve map types, how to use it, limits; "Changes in this version" for revision 3.
+- **Guide (extended_readme.md)** rebuilt around what each control does to the terrain: every Settings control and
+  every Terrain parameter slider with what you see when you raise or lower it, measured tables (e.g. Overall height
+  0-200 % on Great River Valley: tops 3-521 m, flat land, steep land, snow), when it does nothing, and a tip; the
+  Terrain steps at a glance; the Report line by line; questions and problems. Made from a measured fact sheet, three
+  judged description drafts, then checked against the code.
+- The mod.io description ends with the author's computer disclosure (appended when description.html is generated).
+- Revision 3 prepared: mod.json revision 3, RELEASE_NOTES "Revision 3", the readme's changes section.
+
+## [Unreleased] - 2026-10-13 (night) - runs 10-12 in game
+- **Seen working in game:** Lower tree density (the forest cover data identical, Apply about a third faster with
+  fewer tree models), Apply making the preview first, Mountain Range passes exactly on their targets (2.5 % at
+  Gentle, 4.0 % at Hilly), the Sea Strait (narrows of 360-366 m, ships pass end to end), and the Studio opening
+  normally with a mod active that replaces the game's window component. Every exported map matches the offline
+  generator to a few centimetres.
+
+## [Unreleased] - 2026-10-13 (night) - guide for newcomers; the Studio survives other mods' window replacements
+- **Readme and guide rewritten for players new to terrain generators** (the author's request): six steps to a first
+  map, the twelve map types in one line each (what kind of game they give), every setting in plain words, tips for
+  fun maps, a FAQ and the limits; no generator theory. The mod summary says twelve map types.
+- **Fixed: opening the Studio could crash the game when another mod replaced the game's window component**
+  (seen with two installed GUI mods; the game's assertion `NodeStorage.cpp:51` on opening). The Studio now builds its
+  window from the game's own window recipe, found by its id, whatever another mod put in its place, and checks the
+  record the game keeps for it; if the game's tables cannot be found (e.g. after a game update), the UTG button stays
+  off with a tooltip instead of crashing. Offline-checked with five simulated replacement cases; in game: TESTING
+  run 12. DESIGN 24.
+
+## [Unreleased] - 2026-10-13 (evening) - new map type Sea Strait
+Offline-checked only (in game: the internal notes). DESIGN 23.
+### Added
+- **Sea Strait** (a player's request for a map split by water; the author chose the strait from three prototyped and
+  judged designs): the map is split edge to edge by a sea strait open to the sea at both ends. A box **Strait runs**
+  picks East-West (water from the west edge to the east edge, land north and south), North-South or one of two
+  diagonals. Long sounds (about twice as long as wide or more) for ships and ferries, joined at 1-3 **narrows** of
+  356-404 m at the water line (at least 300 m, so only the player bridges the strait; the game's town links stop at
+  250 m), with 336-372 m of it at least 2 m deep and a carved lane so ships always pass end to end; banks 16-26 m
+  high 150 m from the water at the narrows, with solid land behind both landings; flat shore plains and harbour
+  coasts on both banks (at Gentle at least 26 % flat land per bank); islands only in wide sounds; every river drains
+  into the strait. The Report adds a line with the narrows, their widths and whether ships pass end to end.
+- Built in an isolated copy of the project and checked by two independent evaluators over three rounds (narrows
+  width and depth on every map size from 1.5 to 28.7 km, 1:3 and 1:5 strips both ways, diagonals, Coast roughness 0
+  and 200 %, Water and Ship rivers extremes; the look), with a new offline check `tools/strait_check.py` (312 maps
+  in the full set; one known straight shore at Coast roughness 0 % on one 28.7 km map). Every other map type is
+  unchanged (90/90 accepted maps identical; 30 Sea Strait maps added).
+
+## [Unreleased] - 2026-10-13 - Lower tree density, Apply refreshes the preview, Mountain Range passes on target
+All offline-checked only (in game: run 10). run_checks 7/7 (studio 18/18, finish 9/9), core_baseline 90/90.
+- **"Lower tree density" replaces Forests** (the author's request after run 9: help lower-spec computers): a tick box
+  that halves the tree models the finishing pass places; where forests grow stays the same. The pass's parameter
+  `utg_forests` has the values Normal / Lower; the halving now sits only on the tree-placement path, so forest_mask
+  and every other data map are identical either way (the builder's `--check` proves it by walking the node graph,
+  and checks the factor is exactly 1 at Normal under both index formulas the game might use).
+- **Apply makes the preview first** when the settings changed since the last preview (or there is none): Generate
+  after a terrain change, only the finishing pass after a tree-density change, or another generator's preview;
+  then it applies that map. It never applies an outdated map: a change while it waits, closing the window, a failed
+  preview or 180 s without an answer cancels it, with a note to press Apply again.
+- **Mountain Range with Passes uses Alpine's two rules at every Terrain step:** pass floors graded on the lowest
+  ground across their width (Gentle passes 2.70 -> 2.47 %, Mountainous 6.34 -> 5.90 %, targets 2.5 / 6 %; 3 of 16
+  passes over target instead of 12) and rivers behind the range leaving anywhere along the far edge (water along
+  that edge 8.0 -> 0.6 %). Only Mountain Range maps changed (12 baseline maps, approved).
+- **Tooltips for the ten Terrain parameter sliders** in plain words (what each does on the map, when to change it).
+- **Alpine pre-selects Sea side None** (the window only; a choice the player made still carries over between map
+  types, Alpine's pre-selected None does not).
+- **Smoother generating:** the longest step the Studio runs per frame on a 4 km Rolling Plains map at Hilly fell
+  from 109-140 ms to at most 69 ms (pauses added in the lakes and valley set-up; maps unchanged).
+
+## [Unreleased] - 2026-10-13 - run 9: Forests verified in game
+- **Run 9 (in game):** the Alpine map from run 7 now has its north-west ship river bending (the short-river fix);
+  Great River Valley with Sea None leaves the map at the east edge as designed; the Hilly maps after the flat-land
+  retune; every exported map matches the offline core (0.013-0.015 m mean difference).
+- **Forests works in game:** the finishing pass run in the Import biomes mode receives its declared parameter, mapped
+  from the box index to 0 / 0.5 / 1: on one Great River Valley map the forest_mask data map covered 24 % (Few),
+  39 % (Normal) and 44 % (Many) of the map; Apply took 1.8 / 2.8 / 4.4 s. Next (the author's run 9 notes): Forests
+  becomes a "Lower tree density" checkbox that only thins the tree models (for lower-spec computers) and leaves where
+  forests grow unchanged; Apply refreshes an outdated preview by itself.
+
+## [Unreleased] - 2026-10-12 (evening) - "Terrain" label; flat land steps evenly across the Terrain steps
+All offline-checked only (in game: run 9 step 6). run_checks 7/7 (studio_check passes alone; its known frame-time
+flake appeared once under load), core_baseline 90/90.
+- **The Relief setting is labelled "Terrain"** (the author's choice from eight checked names; "Terrain" is the game's
+  own heading for its terrain settings): window label, help line, the Report's "For:" line (a display-only text: "terrain
+  Hilly"), readme, guide and description. Internally it stays `relief` (settings key, log lines that export_check reads,
+  export file names, tools).
+- **Flat land now steps evenly from Gentle to Mountainous**, as heights do. Before, most flat land was gone at Moderate
+  (Hilly sat at 0.83-0.97 of the way to Mountainous in flat land); now Moderate / Hilly / Rugged sit near 0.25 / 0.5 /
+  0.75 on all 11 map types (e.g. Great River Valley flat land 28 / 25 / 23 / 21 / 18 %, Rolling Plains 52 / 45 / 36 /
+  29 / 20 %, Mountain Range 19 / 16 / 13 / 9 / 4 %; means of 8 seeds at 11 km). Three tuning strategies were built in
+  parallel and judged on fresh seeds; the winner interpolates the relief tables between Gentle and Mountainous and
+  keeps plains beside the hill country: `landform.LAND_SLOPE` and `HILL_AMP` at steps 2-4, new `PLAINS_RELIEF` and
+  `RELIEF_BEND`, Alpine `reliefP99` and `flatKeep`, Peninsulas `flatKeep`; at the middle steps the pass floors are
+  graded on the lowest ground across their width, so Mountain Range passes there meet their target grade (4.9 -> 4.0 %
+  at Hilly). Heights and pass grades still step evenly; rail and steep shares move monotonically (the step from Rugged
+  to Mountainous is the largest in steepness). **Gentle and Mountainous maps are byte-identical**; every Moderate,
+  Hilly and Rugged map changes (the 30 Hilly baseline maps were updated, as approved). Alpine at Hilly is a little lower
+  with less snow (snow 3.3 -> 2.0 % of the land). Known limits: single seeds vary around the even means (Island Chain
+  most); Lake District at Moderate stays slightly hilly. Three `ctx.tick()` pauses keep the Studio's longest frame
+  stretch at 23-36 ms.
+
+## [Unreleased] - 2026-10-12 - Hilly pre-selected, Sea None on Great River Valley, Forests setting
+All offline-checked only (in game: run 9). Built from the author's review answers by planned, reviewed and
+adversarially checked steps; run_checks 7/7 (new "finish" check), core_baseline 90/90 (every earlier accepted map
+identical).
+- **Hilly is the pre-selected Relief** (still the middle of the five steps in the list). The core holds the default as
+  data (`pipeline.DEFAULT_RELIEF = 3`): the Studio starts with it and `pipeline.normalise` now uses Hilly when no
+  Relief is given (was Gentle). Hilly is the middle step for heights and pass grades; flat land already drops at
+  Moderate (Great River Valley 29 / 19 / 18 / 17 / 17 %), so a default map has less flat land than before. New Relief
+  tooltip; readme ("Playable, or hard if you want"), guide and description updated. The offline tools keep Gentle as
+  their default (the reference level for the vanilla comparison and the DESIGN targets).
+- **Sea None on Great River Valley** (DESIGN 17.2): a new **Sea** box under "River comes from", only on this map type:
+  "At the river mouth" (pre-selected) or "None". With None the sea strip becomes more valley, the big river still
+  enters on the chosen edge and leaves the map at the opposite edge, every node of that edge is an outlet, Coast
+  roughness has no effect (shown as "-"), and the settings line gains "sea none". The box goes back to "At the river
+  mouth" on every map type change. Core: `side.seaChoice`, `shapes.noSea / inactiveFor / build` take the sea
+  argument, `normalise` passes `sea = false` only for this type. Maps change more than with Mountain Range's Sea side
+  None (the trunk is longer, its bends differ). Tools: export_check reads "sea none", scale_check `--sea none`,
+  settings_check covers all four river directions without sea (the river must leave at the opposite edge).
+- **Forests: Few / Normal / Many** (DESIGN 20): a new box for this mod's generator on climates with a finishing pass.
+  The finishing pass declares its own parameter `utg_forests` and scales its five tree-density curves and the single
+  trees by 0.5 / 1 / 2 (river-bank trees: half on Few; on Many the band reaches twice as far at Normal density, so no
+  hard shoreline line). Normal multiplies by exactly 1, so it is the pass as before. A Forests change alone re-runs
+  only the finishing pass (no new Generate); the Preview, Apply and Run test log lines name the choice. The vanilla
+  `forest` number stays untouched: it moves one plains-forest factor by at most 10 % with an unknown sign. Whether the
+  game hands the choice to the pass in the Import biomes mode, and as 0 / 0.5 / 1, is checked in run 9.
+  `build_finish_tree.py --check` (shipped files equal the build, lint, exact factors) is the new run_checks check
+  "finish".
+- **Mountain passes scale with Relief** (measured, 8 seeds per step, 16 km): summits 71 / 96 / 120 / 140 / 161 m on
+  Mountain Range and 72 / 91 / 111 / 125 / 138 m on Alpine; steepest grades follow the targets 2.5 / 3.25 / 4 / 5 / 6 %
+  (Mountain Range 5-8 % over target on average; Alpine's pass-floor rule would bring it to target).
+- **Street build grade 20 %** read in game (the street menu's Incline slider); recorded in the research docs. The
+  Report's slope classes stay (flat < 3 %, rail 3-8.5 %, steep 8.5-25 %, very steep above).
+- core_baseline also holds Hilly maps now (Relief 1, 3 and 5): 90 accepted maps, 30 of them Hilly maps added as the
+  current output, 6 for Great River Valley without sea.
+- A map type split by water (a player request): three concepts were prototyped and judged; the proposal (a sea strait
+  open at both ends, with narrows for bridges and a direction box) waits for the author's decisions.
+
+## [Unreleased] - 2026-10-12 - run 7: crash on Apply with towns fixed, window movable again
+- **Run 7 (in game):** Run test on Mountain Range Hilly, Great River Valley Hilly with Ship rivers Several, Alpine
+  Gentle with Sea side None and Mountain Range Gentle with Sea side None; Coastal Region with Sea side North; map type
+  changes. Every exported map matches the offline core (0.013-0.017 m mean difference).
+- **Window movable again:** since 2026-10-08 the Studio window was placed by the stylesheet like the game's Statistics
+  window, which pins it. It is movable again and opens centred (`initialX/initialY` 0.5, as the game's movable windows
+  are placed); the stylesheet only sizes it. (The first attempt with `initialX` on 2026-10-08 failed because the
+  window then filled almost the whole screen.)
+- **Fixed: short ship rivers ran straight** (seen in run 7 on an Alpine map with Sea side None and Ship rivers
+  Several): a river course shorter than 2.5 times its meander fade-in (11 x its mouth width, so 4.95 km for a 180 m
+  ship river) got neither bends nor valley wander, only the smoothed drainage line in straight 45-degree legs with
+  sharp corners. "Several" on maps whose rivers leave at an edge often makes such short ship rivers. Now every course
+  longer than 625 m bends (`rivers.MEANDER_MIN`); a short one gets its fades shrunk to 40 % of the course each and its
+  own random stream, so all other rivers keep their bends. On 35 test maps (7 map types x 5 seeds, Several) ship-river
+  straight legs over 1 km fell from 13 to 5 (the rest are the deliberately calm reaches of long rivers), no puddles.
+  Approved change of 2 accepted baseline maps (Delta Lowlands seed 1, Gentle and Mountainous: one short course now
+  bends; ship length 26.9 -> 27.7 km); the other 54 are identical.
+- **Fixed: Apply crashed the game when the map had towns** (Keep towns off; seen in run 7 with 16 towns; confirmed
+  fixed in game the same day: towns removed or kept, Undo, no trees inside kept towns). The game's
+  terrain replacement refuses a map that lists towns (`ReplaceTerrain: Assertion 'map.towns.empty()' failed`), even
+  after the towns were removed from the world. The Studio built the finishing pass's input from the world map WITH its
+  towns and industries, and the Import biomes mode passes the input's towns on to the finished map. The input is now
+  built without towns and industries, as the game's own Import biomes tab does; kept towns stay in the world as before.
+  The same flaw would have crashed **Undo** with towns on the map (and Apply of a heights-only climate): the Undo
+  snapshot is now terrain only too. Research: the internal notes
+- `studio_check.py`: the fake engine now lists towns in maps only when asked for (`makeMapFromGame` arguments), passes
+  them through the Import biomes preview as the game does, and fails on the game's assertion ("GAME CRASH"); 8 of 14
+  checks failed on the old window script, all pass now. The Mountain Range scenario runs with Keep towns on (the towns
+  stay through Apply and Undo). The stylesheet check fails if the window is pinned again (a gravity on the window or
+  not `movable = true` with `initialX/initialY` 0.5).
+- `collect_run.py`: a run file whose name already exists in the run folder with other content (the game log of a later
+  game start) is copied under a dated name with a warning instead of being skipped silently; identical files are
+  reported as already there.
+
+## [Unreleased] - 2026-10-11 - Alpine map type, Sea side None, map type changes keep what is shown
+- **New map type Alpine** (author 2026-10-09, TODO Priority 1; DESIGN 19): distinct snow-capped massifs (about 11 on a
+  16 km map, warped elliptic cones with high uplift on lifted aprons) scattered over hill country, a loose chain of them
+  forming the main divide, two long graded passes from the coastal plain to the far edge, rivers leaving anywhere along
+  the far edge; Sea side with None. Chosen from three concepts tuned in parallel copies of the core and judged on
+  numbers, playability and look (massif field, broken range, percentile mask), then improved with the other two's best
+  ideas: pass floors graded on the lowest ground across their width (`preset.passFloorMin`) and far-edge outlets
+  (`s.farOutlets`), plus valley-like bends on the long routes. Offline, 16 km, Gentle: flat / rail / steep / very steep
+  11.1 / 30.9 / 36.1 / 22.0 % (vanilla 11.4 / 28 / 36.1 / 24.5), P99 334 m (vanilla 333 m), peaks 464-497 m with snow on 1.1 % of
+  the land (vanilla 1.05 %, 471 m), distance to vanilla 0.09 (Mountain Range 0.34); steepest pass 2.57 % on 12 seeds
+  (Mountainous 6.14 % on 9 seeds; P99 541 m, peaks up to 827 m); time about Mountain Range's.
+- Core for it (default-preserving: the 48 accepted maps stay identical): `passes.profile/build` take an optional
+  window (the lowest ground across the floor), `landform` passes it for `preset.passFloorMin`; `shapes.build` turns the
+  far edge into outlets for `s.farOutlets` (shared with the Sea side None edge).
+- Relief tooltip names where snow starts per type (snow from about 330 m: Alpine's peaks from Gentle); readme map list
+  and extended guide (eleven types, Alpine for an alpine region and its own heights per Relief step, passes on Mountain
+  Range and Alpine) updated, description.html regenerated.
+- **Review fixes** (an independent review of the finished work; 20 of 27 findings confirmed by a second check):
+  Alpine's pass foot stays at least 200 m above the last sea point on its axis (a foot in the ragged sea graded its first
+  100 m at 2.7-3.0 % on small maps and at high Coast roughness, now 2.2-2.5 %); on maps under 7.5 km across a massif keeps
+  a smaller clearance from the passes (narrow maps had no massifs at all); `shapes.build` hands the coast roughness to
+  setup (5th argument, ignored by the other types). The Terrain parameters note under Sea side None says "No effect
+  without sea" instead of blaming the map type. core_baseline reports accepted maps the core no longer generates (GONE)
+  and refuses --add-new then; scale_check names maps by the side the core really used, writes valid JSON and documents
+  numeric seeds; tool headers, DESIGN and the guides corrected (None keeps the layout, not every height; pass targets
+  2.5 / 3.25 / 4 / 5 / 6 %).
+- **Sea side None** (author 2026-10-11: "for map types where it makes sense, particularly Mountain Range with Passes"):
+  Mountain Range with Passes, Alpine and Highland Plateau can have no sea (DESIGN 17.1). The sea's strip becomes land
+  that keeps the type's fall towards that edge, every node of that edge is an outlet, so the rivers leave the map
+  there; the layout stays the one with a sea (setup draws the same numbers), while rivers, valleys and heights can
+  differ (little on Mountain Range and Alpine, much on Highland Plateau). Core: `shapes.SIDE_NONE` = 5,
+  `side.none`, `shapes.noSea`, `shapes.inactiveFor`; one-pass types skip the sea test with `s.noSea`, two-pass types
+  get a signed distance (negative where the sea would be); no ragged coast (`ragScale` 0) and no coast-distance relief
+  cap without sea. `pipeline.normalise`: side 5 only where offered (else 0). Not offered where the sea is the feature
+  (Delta Lowlands, Large Bays, Peninsulas, Coastal Region).
+- **Map type changes keep what is shown** (author 2026-10-11: "all the drop downs and sliders will be used with their
+  current shown status/choice"; DESIGN 18): the side choice stays when it names the same edge on the new type (Sea
+  side North on Mountain Range stays North on Alpine), else Random; the side box offers None only where it exists;
+  the side and Ship rivers boxes are keyed by map type (`meta.localKey`, as the base game keys its parameter widgets),
+  so a box cannot keep the previous type's choice on screen; Ship rivers' first choice names the type's default ("Map
+  type default (One)"); Coast roughness shows "-" without sea. The note "No sea:..." appears under None.
+- Descriptions: Mountain Range no longer says "the most alpine type" (Alpine is); Mountain Range and Highland Plateau
+  mention the sea choice. strings.json: 5 new texts, 3 changed (incl. the Relief tooltip).
+- Alpine sits after Mountain Range in the map type list; `core/climate.lua` lists it for Temperate and Subarctic.
+- Further core extensions (no effect on existing maps): a one-pass type may return a lift as eval's 4th value;
+  `preset.reliefP99` (the P99 target per Relief step) and `preset.slope` (slope-limit factor) are optional per type.
+- Tools: `core_check.py` honours `UTG_SCRIPTS` (run a copy of the core); `scale_check.py`: `--seeds`, `--side`,
+  `--out`, `--json`, parallel, new columns P50 / P90 / snow (land >= 330 m) / max / dist (distance to the vanilla
+  targets) / pass / col; `core_baseline.py`: Sea side None maps (`/none`) and `--add-new` (adds maps the baseline
+  lacks, refuses if an accepted map differs); `settings_check.py`: Alpine in `sides`, Sea side None cases (no sea node;
+  Coast roughness without effect); `studio_check.py`: map types by id, scenarios "Alpine, Sea side None" and "map type
+  changes" (every box and slider against the core, three generations compared with the Report line; five broken
+  copies of the window all caught); `export_check.py` reads `side none`; `core_check.py` expects two passes on Alpine.
+- Baseline: the 40 earlier accepted maps identical throughout; added with `--add-new`: 8 Sea side None maps (Mountain
+  Range, Highland Plateau) and 8 Alpine maps (with and without sea): 56 maps.
 
 ## [Released] revision 2 - 2026-10-09 - mod.io 6433560
 - Uploaded to mod.io (mod file checked against the download); release tag `utg-r2`; public repository

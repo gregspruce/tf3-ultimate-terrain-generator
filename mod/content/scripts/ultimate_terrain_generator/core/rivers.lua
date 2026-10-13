@@ -35,6 +35,7 @@ M.SHIP_W_MOUTH, M.SHIP_W_UP, M.SHIP_DEPTH = 180, 120, 5.0
 M.SHIP_MIN_LEN = 4000 -- m: with "Several", the extra ship rivers are navigable at least this far (if they are that long)
 M.SMALL_W_MIN, M.SMALL_W_MAX = 18, 58
 M.STEP = 8 -- metres between points of the final courses
+M.MEANDER_MIN = 625 -- m: shorter courses keep their smoothed drainage line (2.5 x the smallest fade-in, 250 m)
 
 local chaikin, resample = grid.chaikin, grid.resample
 
@@ -261,7 +262,10 @@ function M.build(hydro, g, shape, opts, ctx)
 	local r = noise.rng(noise.derive(opts.seed, "rivers"))
 	local wobble = noise.perlin(noise.derive(opts.seed, "meander"))
 	local sizeX, sizeY = (g.w - 1) * g.cell, (g.h - 1) * g.cell
-	local bounds = { -g.cell, -g.cell, sizeX + g.cell, sizeY + g.cell }
+	-- (the meandered courses stay within a cell of the map; a type may keep them further in along some edges:
+	-- shape.riverBounds, Sea Strait along the two edges its strait meets, where a river ran along and beyond the edge into
+	-- the strait's mouth, review 2026-10-13)
+	local bounds = shape.riverBounds or { -g.cell, -g.cell, sizeX + g.cell, sizeY + g.cell }
 	local shipTo = chooseShips(rivers, opts.ships, aWater, f, g)
 	local paths = {}
 	local finalOf = {}
@@ -366,10 +370,18 @@ function M.build(hydro, g, shape, opts, ctx)
 			return amp * small * (0.85 + 0.35 * wobble(bi * 0.03 + 40, id * 1.7))
 		end
 		local fadeIn = max(250, 11 * aW[1])
+		local fadeOut = max(200, 8 * aW[#aW])
+		local total = (nr - 1) * M.STEP
 		local mx, my, mt, belt
-		if (nr - 1) * M.STEP > 2.5 * fadeIn then
-			mx, my, mt, belt = meander(cx, cy, M.STEP, wl, om, fadeIn, max(200, 8 * aW[#aW]), bounds, r, wobble,
+		if total > 2.5 * fadeIn then
+			mx, my, mt, belt = meander(cx, cy, M.STEP, wl, om, fadeIn, fadeOut, bounds, r, wobble,
 				id * 5.3 + 200)
+		elseif total > M.MEANDER_MIN then
+			-- a course shorter than 2.5 fade-ins (a short ship river: fade-in 11 x 180 m) bends too, its fades shrunk to
+			-- 40 % of the course each. Its own random stream, so the other rivers keep their bends (run 7: a 4.8 km ship
+			-- river from "Several" kept the straight 45-degree legs of the drainage grid).
+			mx, my, mt, belt = meander(cx, cy, M.STEP, wl, om, total / 2.5, min(fadeOut, total / 2.5), bounds,
+				noise.rng(noise.derive(opts.seed, "short-meander/" .. id)), wobble, id * 5.3 + 200)
 		else
 			mx, my, mt, belt = rx, ry, {}, 0
 			for i = 1, nr do mt[i] = i end
