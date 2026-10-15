@@ -1,6 +1,42 @@
 # Changelog - Ultimate Terrain Generator
 
-Format: [Keep a Changelog](https://keepachangelog.com/). Last Updated: 2026-10-13 (released revision 3; earlier: description and guide, revision 3 prepared; earlier: runs 10-12; earlier: newcomer guide, Studio crash guard; earlier: Sea Strait; earlier: Lower tree density, Apply refresh, Mountain Range passes; earlier: run 9: Forests verified in game; earlier 2026-10-13: "Terrain" label, flat land steps evenly; earlier 2026-10-12: Hilly pre-selected, Sea None on Great River Valley, Forests; earlier: run 7: crash on Apply with towns fixed and confirmed in game; window movable again; short ship rivers bend now).
+Format: [Keep a Changelog](https://keepachangelog.com/). Last Updated: 2026-10-15 (run 14, revision 4 release state; earlier 2026-10-14: revision 4 prepared: all four climates; earlier 2026-10-13: released revision 3; earlier: description and guide, revision 3 prepared; earlier: runs 10-12; earlier: newcomer guide, Studio crash guard; earlier: Sea Strait; earlier: Lower tree density, Apply refresh, Mountain Range passes; earlier: run 9: Forests verified in game; earlier 2026-10-13: "Terrain" label, flat land steps evenly; earlier 2026-10-12: Hilly pre-selected, Sea None on Great River Valley, Forests; earlier: run 7: crash on Apply with towns fixed and confirmed in game; window movable again; short ship rivers bend now).
+
+## [Unreleased] - 2026-10-15 - run 14 in game; revision 4 release state
+- **Run 14 (in game):** all four climates' finishing passes run through the Import biomes mode (coloured preview,
+  trees and rocks, every data map of the climate), Apply without a crash, the game's climate strings as the passes
+  declare them; exports equal the offline core (0.012-0.020 m). Subarctic and Tropical look right.
+- **Known issue (in the description):** on Dry all low land up to about 12 m is bright red sand (Dry's biome 2 band),
+  e.g. Great River Valley's floor and most of Delta Lowlands, and farms find little land there; revision 5 retunes
+  Dry's ground together with Dry's own map types.
+
+## [Unreleased] - 2026-10-14 - revision 4 prepared: all four climates
+- **The twelve map types in Subarctic, Tropical and Dry** (player request): each climate now has its own finishing
+  pass in the mod, so the Studio's Preview and Apply give that climate's own trees, rocks, ground, biomes and data maps
+  (until now those climates got the terrain shape only, and the preview stayed empty). The map types are the
+  Temperate ones; map types made for these climates come in a later update. The terrain core and the Temperate pass
+  are unchanged byte for byte: every accepted map is identical. Details: DESIGN 25.
+- **Finishing-pass builder:** each pass writes its climate's biome raster and layers (derived from what the climate's
+  import tree reads, checked against the climate's normal generator), so the preview is coloured in every climate;
+  a climate is shipped by its table status (the one-off ship option is gone); Dry's asset river factor comes straight
+  from the river mask (no plants or rocks in river water, and no dependence on a distance map without a source on a
+  map without rivers); Dry's monument-valley and coast-hill heights and Tropical's island heights, empty with the
+  Studio's terrain, are 0 instead of a normalised constant map. `--check` now also proves that the mod holds exactly
+  the shipped passes (two files each), that each pass writes the raster and its climate's layers and names its
+  climate as the game's lists compare it (17 rows).
+- **Studio:** the climate note follows the finishing pass: on Subarctic, Tropical and Dry it says the map types are
+  made for Temperate and names the ones that suit the climate best; "terrain shape only" remains for a climate without
+  a pass (a climate another mod adds gets a neutral note). The Terrain tooltip names each climate's own snow or
+  bare-rock line and which map types reach it; the Overall height tooltip says what higher land brings in that climate.
+  Run test works in all four climates. The Run test and Apply log lines name the climate and the finishing pass.
+  Fixed: a waiting Apply's log line named a tree density on climates without that setting; one window text (the
+  preview note after reopening the window) had no translation key.
+- Lower tree density stays on Temperate (each climate wires its trees differently).
+- **Offline checks:** studio_check (30 checks) builds its list of finishing passes from the mod's files, runs main
+  flows on the Dry, Subarctic and Tropical passes and an Apply-refresh on the Tropical pass, and keeps the no-pass path
+  (a flag) on Dry and Temperate and for a climate another mod adds.
+- **Readme, guide, description:** every climate; per-climate snow and rock lines (measured on the accepted maps); a
+  Climates section in the guide; "Changes in this version" for revision 4.
 
 ## [Released] revision 3 - 2026-10-13 - mod.io 6433560
 - Uploaded through the game's Mod Hub as an update of mod.io 6433560; release tag `r3` in the public repository.

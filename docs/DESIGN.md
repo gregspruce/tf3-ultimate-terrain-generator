@@ -1550,3 +1550,89 @@ one scenario.
 **In game:** with a mod that replaces `builtin.Window` active, the Studio opens and works, and the
 log has the `[UTG] Another mod replaced the game's window component` line. Mods that also replace react's registration
 functions must be off for that run: with them the Studio takes the normal path and the guard is not exercised.
+
+## 25. All climates: the map types in Subarctic, Tropical and Dry (author 2026-10-14; revision 4)
+
+**Decision (author, 2026-10-14):** players asked to use the Studio and the terrain engine in every climate. Revision 4
+lets the twelve map types (designed for Temperate) run in Subarctic, Tropical and Dry, each with its climate's own
+finishing pass (trees, rocks, ground, biomes, data maps). Map types made for those climates (Fjord Coast, Mesa
+Country, Volcanic Islands; `core/climate.lua` `newTypes`) come in the next update. The core is unchanged: a seed gives
+the same heights in every climate, and every accepted map stays identical (`core_baseline`). The Temperate pass is
+unchanged byte for byte.
+
+**Finishing passes (`tools/build_finish_tree.py`, table `CLIMATES`).** Each climate's pass is its vanilla import tree
+with every imported input replaced by a recipe computed from the heights (built 2026-10-08 as drafts, research
+the internal notes). Changes for shipping:
+- **Biome outputs per climate.** A pass writes the biome raster and every layer its climate imports (`output_biomes`;
+  a climate's normal generator writes exactly the layer keys its import tree reads, checked in the files for all four),
+  each from the recipe that replaced the import: Subarctic `lakes` (open water), `swamps`, `mountains` (100 -> 170
+  m); Tropical `volcano`, `mountains` (120 -> 250 m), `islands`; Dry `rivers`, `mountains` (120 -> 250 m),
+  `monument_valley`, `coast_hills`, `mesas`. Without the raster the Import biomes mode would show the placeholder
+  file's all-biome-0 blue preview. Temperate's three outputs come out as before.
+- **Shipping by status.** `status: "shipped"` puts a pass into the mod folder and makes `--check` compare it byte for
+  byte; the old `--ship` option shipped for one build only, so a shipped copy could go stale unseen. It is gone.
+- **Dry river guard.** Vanilla Dry multiplies both of its asset inputs (rocks and plants) by a factor that is 0 within
+  1 m of the blurred river core, computed from a distance map of the river layer (on narrow channels the core can
+  vanish and nothing is cleared). On a map without river cells that distance map has no source pixel (an engine case
+  vanilla never meets: its river amount is at least 0.001); if the engine gives 0 there, the map would get no plants and
+  no rocks. The factor now comes straight from the river mask: 0 on exactly the river water, 1 elsewhere. UTG needs it
+  anyway: river water is biome index 0, which Dry's class-1 mask counts as its own, so only this factor keeps shrubs out
+  of the rivers. On wide rivers shrubs and rocks may now reach the waterline (vanilla left about 1 m): judged in run 14.
+  Dry's river shrubs and river stones still read the vanilla distance; without river cells they place nothing whatever
+  it returns.
+- **Empty layers are not normalised.** UTG gives Dry's monument valley and coast hills and Tropical's islands no content. Vanilla normalises the heights they make (`normalize_map` of a constant map, never seen in game: min = max) and
+  feeds the result into shrub, cactus, stone and hill-tree densities through arithmetic only. With an empty layer each
+  of those nodes means exactly 0 ("no feature"), so the pass replaces them by 0 (Dry `height range`, `New Normalize Map
+  #311`; Tropical `island heights`). The constant-map case of the Temperate pass (its mountains chain on maps without
+  land above 250 m) reaches the trees only through distance thresholds and is left as it is. Normalisations that still
+  see a zero layer MAX it with a real density first (Subarctic plains trees, two Tropical forest_mask maps).
+- **Biome bands** stay the first values of 2026-10-08 (band 4 from 130 m Subarctic, 120 m Tropical; Dry 0-2-1-4-3
+  from 0 / 12 / 80 / 170 m); run 14 reads the land shares per biome and they move only if one band dominates (the
+  biome masks steer where the game places industries).
+- **Lower tree density** stays Temperate only (DESIGN 20): each climate wires its tree kinds differently (Subarctic
+  `combine_map` stacks, Tropical about nine kinds MAXed, Dry about twelve shrub and cactus kinds), so the scaling and its
+  checks are per climate work for a later update. The Studio shows the box only where the climate's pass declares it.
+
+**What the climates paint on these map types** (snow and rock lines from the climate trees and `core/climate.lua`; the
+heights are the same in every climate). Which Terrain step reaches a line was measured on 2026-10-14 on the accepted
+core maps (`tools/core_baseline.json` at Gentle, Hilly and Mountainous, probes of the same core at Moderate and Rugged;
+11 km, seeds 1 and 2, sliders 100 %, land P99 and highest point). The readme, the guide and the Studio's Terrain
+tooltip use these words. They replace a first estimate (P99 140 / 210 / 280 / 350 / 420 m times a factor per map type)
+that the measured maps disprove (Great River Valley P99 180-190 m at Gentle, 470-500 m at Mountainous).
+- Temperate: rock from about 280 m, snow from about 330 m.
+- Subarctic: rock from about 130 m, snow from about 210 m. Alpine, Mountain Range and Highland Plateau reach the snow
+  from Gentle (P99 305-345, 224-243 and about 220 m), most other map types from Moderate (P99 about 230-300 m); Island
+  Chain and Rolling Plains only a few peaks from Rugged (highest point 211-269 m); Delta Lowlands hardly ever (at most
+  a spot at Mountainous: highest point 192 / 252 m). The sea counts as open water for the lake-shore tree band
+  (vanilla's lakes layer is inland lakes only): judged in run 14.
+- Tropical: no snow; bare rock from about 210 m, reached by the same map types at the same steps as Subarctic's snow.
+  Its hill trees and palms read a slope band (0.15-0.75 in the import tree); that this leaves few trees on Gentle and
+  Moderate hills is inferred only (the band's slope unit is not verified), so the player text does not say it.
+- Dry: no snow; rocky ground on high land (the `mountains` map from 120 m); no forest_mask (Dry has none).
+
+**Studio.** The climate note on the Settings tab follows the pass, not `climate.lua`'s `finished` (data only,
+unchanged), and whether `climate.lua` knows the climate (the Studio's `climateProfile()`, read as `profile()` does):
+- a climate `climate.lua` does not know (another mod's) and no pass -> "This climate gets the terrain shape only (no
+  forests or biomes)." (no climate name: `profile()` would say Temperate);
+- a known climate whose pass is missing (failed to load) -> "Climate: X. Gets the terrain shape only (no forests or
+  biomes). Best map types:...";
+- a known climate with a pass whose map types are not its own -> "Climate: X. The map types are made for Temperate; map
+  types for this climate come later. Suits best:..." (`climate.lua` `fits`);
+- Temperate -> no note.
+The Terrain tooltip (`TERRAIN_TIPS`) names the climate's own snow or bare-rock line and which map types reach it; the
+Overall height tooltip (`HEIGHT_TIPS`) says what higher land brings in that climate (more snow on Temperate and
+Subarctic, more bare rock on Tropical, neither on Dry). Temperate's texts are unchanged; a climate `climate.lua` does
+not know gets Temperate's tooltips (open: a neutral text). The Run test and Apply log lines end with "climate <climate>,
+finishing pass <name>" ("none" for bare heights), so run material shows which climate it came from.
+
+**Checks.** `build_finish_tree --check` (17 rows): the mod holds exactly the shipped climates' passes; each shipped pass
+equals the build, writes the biome raster and its climate's layers, and names its climate in the canonical form the
+game's lists compare (`::/climates/<c>/<c>.clima`); lint; Temperate's four tree density rows. `studio_check` (30
+checks): the fake engine builds its list of finishing passes from the mod's files; main flows on the Dry pass (with Run
+test), Subarctic Lake District and Tropical Coastal Region (Preview runs the climate's pass by name), an Apply-refresh on
+the Tropical pass; the no-pass path kept by a flag (Dry, Temperate) and a climate another mod adds; the climate note,
+Terrain and Overall height tooltips checked per climate as soon as the window opens; planted faults each caught.
+
+**In game:** each climate's pass loads and runs through the Import biomes mode (coloured preview,
+trees, rocks, data maps), Apply without a crash, the climate strings, land shares per biome, Subarctic coasts and a map
+without open water, Dry on a low map.

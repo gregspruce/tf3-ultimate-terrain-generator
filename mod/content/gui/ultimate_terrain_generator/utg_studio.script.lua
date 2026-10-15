@@ -14,7 +14,7 @@ WHAT IT DOES
               generator that keeps our heights and adds biomes, forests, rock, river trees and the data maps) on the
               generated heights, in this window, through the map editor's Import biomes mode
     Apply     replaces the world terrain with the finished preview (or with the bare heights where this climate has
-              no finishing pass yet); when the settings changed since that preview, or there is none, it first runs
+              no finishing pass); when the settings changed since that preview, or there is none, it first runs
               what Preview runs and applies the new map when it is ready (owner 2026-10-13, run 9)
     Undo      puts back the terrain from before the last Apply (trees are not restored)
     Test set  (debug) generates a fixed list of cases (TEST_SET: map types, Relief, Water; one seed) on this map size
@@ -190,9 +190,9 @@ local function sendReplaceTerrain(map, keepAssets, label, seed, onDone)
 end
 
 -- The finishing-pass generator of the current climate (editor only), or nil; second value: whether that pass declares
--- the tree density parameter. Only a pass built to thin its trees declares it (tools/build_finish_tree.py; review
--- 2026-10-12: a draft pass shipped as built has none, so its climate gets no box that does nothing). The declared
--- parameters are read as the base editor reads them (gui/map_editor/map_editor.tl addMissingGeneratorParams).
+-- the tree density parameter. Only a pass built to thin its trees declares it (tools/build_finish_tree.py: Temperate's;
+-- the Subarctic, Tropical and Dry passes of revision 4 have none, so their climates get no box that does nothing). The
+-- declared parameters are read as the base editor reads them (gui/map_editor/map_editor.tl addMissingGeneratorParams).
 local function finishingGenerator()
 	local climate = api.res.getBaseConfig().climate
 	for k, _ in pairs(app.res.terrainGeneratorRep.getAll()) do
@@ -209,10 +209,23 @@ local function finishingGenerator()
 	return nil, false
 end
 
+-- The climate of this map and the finishing pass used, for the Run test and Apply log lines (revision 4: the passes of
+-- four climates; Subarctic's, Tropical's and Dry's climate strings had never been seen in a log), so run material shows
+-- which climate and pass it came from. pass: the pass's name, "none" (the bare heights), or nil for a game generator's
+-- map (no pass involved). Kept out of settingsText: export_check parses that, and the stale-preview note compares it.
+local function climateText(pass)
+	local okC, climate = pcall(function() return api.res.getBaseConfig().climate end)
+	local s = "climate " .. tostring(okC and climate or "?")
+	if pass ~= nil then s = s .. ", finishing pass " .. tostring(pass) end
+	return s
+end
+
 -- After every Apply: what the game's data maps say (TERRAIN.dataMaps, 32 m cells, values 0..1; industries research
 -- doc T5). For each map: its share of the map (cells above 0.5) and the mean ground height there. If the finishing
--- pass sees our real heights, biome0 is the water (below 0 m), biome4 the high ground and forest_mask covers land; if
--- its height input arrives wrong (flat, zero), the bands do not follow the terrain.
+-- pass sees our real heights, biome0 is the water (below 0 m), biome4 (in Temperate) the high ground and forest_mask
+-- covers land; if its height input arrives wrong (flat, zero), the bands do not follow the terrain. Which maps exist and
+-- what each band means is the climate's (Dry has no forest_mask and orders its bands 0-2-1-4-3; the keys are listed as
+-- found).
 local function logDataMaps(label)
 	local ok, err = pcall(function()
 		local terrain = api.engine.getComponent(api.engine.util.getWorld(), api.type.ComponentType.TERRAIN)
@@ -349,8 +362,8 @@ local TUNE_LABELS = {
 -- (shapes.COAST_RAG), none without sea; rivers = divides the drained area a river needs (smaller valleys get rivers);
 -- lakes = the lakes wanted on the rivers (natural basins only; oxbow lakes are not counted); meander = how strongly
 -- rivers wind (0: only the valley's gentle curve is left); valley = the width of the floodplains and valley sides.
+-- Overall height's tooltip depends on the climate (HEIGHT_TIPS below), so it is not in this table.
 local TUNE_TIPS = {
-	height = "How high the whole land rises: hills, mountains and plateaus together. Lower it for flatter land that is easier for railways and roads; raise it for higher, steeper land with more snow on the peaks. 0 % gives almost flat land.",
 	hills = "How much of the land is hill country: patches of hills a few kilometres across, with lower, open land between them. Lower it for more open land for towns and railways; raise it for more hills (at 200 % nearly all the land). How tall the hills are is Hill height.",
 	hillHeight = "How tall the hills in the hill country are. Lower it for low, gentle hills that roads and railways cross easily; raise it for tall, steep hills. Where the hills are and how much land they cover stays the same (that is Hill country).",
 	detail = "Small bumps a few metres high on hills and slopes, so they look natural rather than smooth. Plains, valley floors and beaches get none, so they stay easy to build on. Lower it for smoother hills, raise it for rougher, rockier ground.",
@@ -361,6 +374,43 @@ local TUNE_TIPS = {
 	meander = "How much the rivers wind. 0 % gives almost straight rivers that follow the valley's gentle curve, easy to run a railway beside; raise it for wide, looping bends.",
 	valley = "How wide the flat valley floors along the rivers are. Wider valleys give more flat land beside the rivers for towns, stations and railways; at 0 % the valleys are narrow with steep sides.",
 }
+-- The Terrain box's tooltip per climate (core/climate.lua profile key; a climate it does not know gets Temperate's, as
+-- profile() does). The map types and their heights are Temperate's in every climate (revision 4), but each climate paints
+-- snow and bare rock from its own heights (climate trees; climate.lua snowLine, rockLine): Temperate rock from ~280 m,
+-- snow from ~330 m; Subarctic rock from ~130 m, snow from ~210 m; Tropical no snow, bare rock from ~210 m; Dry neither.
+-- Which Terrain steps reach 210 m (2026-10-14: the core baseline's maps at Gentle, Hilly and Mountainous plus a scratch
+-- run at Moderate and Rugged with its generator; 11 km, seeds 1 and 2, sliders 100 %). Two measures, named in the text:
+-- "reach it" = the map's P99 height is at or above 210 m (a band of snow or rock, not a lone summit); "only a few peaks"
+-- and "hardly ever" = only the highest point is. Alpine (P99 305-345 m), Mountain Range (224-243 m) and Highland
+-- Plateau (~220 m) reach it at Gentle; most other map types from Moderate (P99 232-302 m; at Gentle their P99 is
+-- 166-197 m); Island Chain and Rolling Plains only a few peaks from Rugged (highest point 211-269 m; one Island Chain
+-- map has a single 233 m top at Hilly); Delta Lowlands hardly ever (at most a spot at Mountainous: highest point
+-- 192 / 252 m, P99 156-161 m). Temperate's text is unchanged (DESIGN 18, 2026-10-12).
+local TERRAIN_TIPS = {
+	temperate = "Hilly is the middle step. Gentle gives the most flat land, higher is steeper. Snow from about 330 m: Alpine's peaks reach it from Gentle, the highest hills of most other map types from Hilly.",
+	subarctic = "Hilly is the middle step. Gentle gives the most flat land, higher is steeper. Snow from about 210 m: Alpine, Mountain Range and Highland Plateau reach it from Gentle, most other map types from Moderate; Island Chain and Rolling Plains only a few peaks from Rugged; Delta Lowlands hardly ever (at most a spot at Mountainous).",
+	tropical = "Hilly is the middle step. Gentle gives the most flat land, higher is steeper. No snow. Bare rock from about 210 m: Alpine, Mountain Range and Highland Plateau reach it from Gentle, most other map types from Moderate; Island Chain and Rolling Plains only a few peaks from Rugged; Delta Lowlands hardly ever (at most a spot at Mountainous).",
+	dry = "Hilly is the middle step. Gentle gives the most flat land, higher is steeper. No snow.",
+}
+-- The Overall height slider's tooltip per climate (revision 4, review 2026-10-14): what higher land brings on the peaks
+-- is the climate's, as in TERRAIN_TIPS: snow in Temperate and Subarctic, bare rock in Tropical, neither in Dry; a
+-- climate climate.lua does not know gets Temperate's. Temperate's and Subarctic's text is the one all climates had before.
+local HEIGHT_TIPS = {
+	temperate = "How high the whole land rises: hills, mountains and plateaus together. Lower it for flatter land that is easier for railways and roads; raise it for higher, steeper land with more snow on the peaks. 0 % gives almost flat land.",
+	tropical = "How high the whole land rises: hills, mountains and plateaus together. Lower it for flatter land that is easier for railways and roads; raise it for higher, steeper land with more bare rock on the peaks. 0 % gives almost flat land.",
+	dry = "How high the whole land rises: hills, mountains and plateaus together. Lower it for flatter land that is easier for railways and roads; raise it for higher, steeper land. 0 % gives almost flat land.",
+}
+HEIGHT_TIPS.subarctic = HEIGHT_TIPS.temperate
+-- This map's climate profile (core/climate.lua, data only: name, fitting map types, whether the map types are its own)
+-- and whether climate.lua knows the climate at all. profile() gives a climate it does not know (one another mod adds)
+-- Temperate's profile, so the climate note must not use it there: it would name Temperate and Temperate's map types
+-- (review 2026-10-14). The key is read from the climate's resource name the way profile() reads it
+-- ("::/climates/dry/dry.clima" -> "dry"); the core stays unchanged.
+local function climateProfile()
+	local res = tostring(api.res.getBaseConfig().climate or "")
+	local key = res:match("([%a_]+)%.clima$") or res:match("^([%a_]+)$")
+	return climates.profile(res), key ~= nil and climates.PROFILES[key] ~= nil
+end
 local function defaultTune()
 	local t = {}
 	for _, e in ipairs(pipeline.TUNE) do t[e.key] = 100 end
@@ -381,6 +431,8 @@ local S = {
 	requestText = nil, -- the settings the current preview request was made with (stale-preview note)
 	requestTrees = nil, -- the tree density of the last finishing-pass request (stale-preview note, Apply log); kept
 	                    -- when closing the window clears S.request, as S.ready is; nil when the pass has no such parameter
+	requestPass = nil, -- the finishing pass of that request (Apply log: the pass the ready map was finished with); kept
+	                   -- like requestTrees
 	measure = nil,     -- numbers of a finished engine preview (Report tab): { text, for }
 	job = nil,        -- running pipeline.job
 	jobT0 = 0,
@@ -647,7 +699,9 @@ local function startPreview(setStatus)
 	if S.result == nil then setStatus("Generate first.") return end
 	local gen, withTrees = finishingGenerator()
 	if gen == nil then
-		setStatus("No finishing pass for this climate yet: Apply sets the heights only.")
+		-- every climate of the game has a pass since revision 4: this is a pass that failed to load, or a climate another
+		-- mod adds
+		setStatus("This climate has no finishing pass: Apply sets the heights only.")
 		return
 	end
 	S.heightsMap = S.heightsMap or buildHeightsMap()
@@ -658,7 +712,8 @@ local function startPreview(setStatus)
 	end
 	S.ready = nil
 	S.request = finishRequest(gen, biomes, withTrees)
-	S.requestKind, S.requestText, S.requestTrees = "utg", settingsText(S.result.settings), S.request.trees
+	S.requestKind, S.requestText, S.requestTrees, S.requestPass = "utg", settingsText(S.result.settings), S.request.trees,
+		gen
 	out(string.format("Preview: finishing pass %s (Import biomes mode)%s", tostring(gen), treesText(S.request.trees, ", ")))
 	-- the preview picture shows the land only; the pass computes forests and biomes for Apply (owner: the old text
 	-- "adding forests ... in the preview" promised something the preview cannot show)
@@ -716,13 +771,16 @@ local function settingsChanged()
 end
 
 -- The window's current settings as one line, what a Preview now would be made with (a waiting Apply compares it every
--- frame: any change after the click cancels the Apply, even during a Generate, when settingsChanged cannot tell yet)
+-- frame: any change after the click cancels the Apply, even during a Generate, when settingsChanged cannot tell yet). The
+-- tree density only where this climate's pass declares it (revision 4: the Subarctic, Tropical and Dry passes do not,
+-- and the waiting Apply's log line must not name a density the pass never gets; nor can it change there: no box).
 local function currentSettingsLine()
 	if S.source ~= "utg" then
 		local g = engineGen()
 		return g and engineSettingsText(g) or ("generator " .. tostring(S.source))
 	end
-	return settingsText(pipeline.normalise(coreSettings())) .. treesText(S.settings.trees, "; ")
+	local _, withTrees = finishingGenerator()
+	return settingsText(pipeline.normalise(coreSettings())) .. treesText(withTrees and S.settings.trees or nil, "; ")
 end
 
 -- Whether Apply can put in, right now, a map made with the current settings (no side effects; called on every render
@@ -753,7 +811,7 @@ local function previewRunning()
 	return S.request ~= nil and S.ready == nil and S.requestKind == kind and not settingsChanged()
 end
 
--- What Apply would put into the world now, or nil and the reason.
+-- What Apply would put into the world now, or nil and the reason. pass: the finishing pass for the log (climateText).
 local function applyTarget()
 	if S.source ~= "utg" then
 		if S.requestKind ~= "engine" or S.ready == nil then return nil, "Press Preview and wait for the finished preview first." end
@@ -770,12 +828,12 @@ local function applyTarget()
 		-- the tree density the ready map was finished with, not the box's current one (run material ties screenshots
 		-- to it)
 		return { map = S.ready, what = "finished map" .. treesText(S.requestTrees, ", "), seed = S.resultSeed,
-			pending = pending() }
+			pass = S.requestPass, pending = pending() }
 	end
 	if finishingGenerator() == nil then
 		S.heightsMap = S.heightsMap or buildHeightsMap()
 		return { map = S.heightsMap, what = "heights only (no finishing pass for this climate)", seed = S.resultSeed,
-			pending = pending() }
+			pass = "none", pending = pending() }
 	end
 	return nil, "Press Preview and wait for the finished preview first."
 end
@@ -834,8 +892,8 @@ local function apply(setStatus, noRefresh)
 	local undoMap = api.engine.terrain.makeMapFromGame(true, false, false, false)
 	setBusy(true)
 	pcall(function() api.gui.map.setMapSeedText(target.seed) end)
-	out(string.format("Apply: %s (keep towns %s, keep industries %s)", target.what, tostring(st.keepTowns),
-		tostring(st.keepIndustries)))
+	out(string.format("Apply: %s (keep towns %s, keep industries %s); %s", target.what, tostring(st.keepTowns),
+		tostring(st.keepIndustries), climateText(target.pass)))
 	setStatus("Applying...")
 	local removing = not (st.keepTowns and st.keepIndustries)
 	-- base order: towns, then industries, then the terrain, each step in the previous step's callback
@@ -1018,11 +1076,11 @@ local function startAutoTest(setStatus)
 		return
 	end
 	local gen, withTrees = finishingGenerator()
-	if gen == nil then setStatus("Run test needs a climate with a finishing pass (Temperate).") return end
+	if gen == nil then setStatus("Run test needs this climate's finishing pass.") return end
 	S.autoTest = { id = newId() }
-	out(string.format("Run test %s: %s%s; keep towns %s, keep industries %s", S.autoTest.id,
+	out(string.format("Run test %s: %s%s; keep towns %s, keep industries %s; %s", S.autoTest.id,
 		settingsText(pipeline.normalise(coreSettings())), treesText(withTrees and S.settings.trees or nil, "; "),
-		tostring(S.settings.keepTowns), tostring(S.settings.keepIndustries)))
+		tostring(S.settings.keepTowns), tostring(S.settings.keepIndustries), climateText(gen)))
 	autoTestStage("preview")
 	previewClicked(setStatus)
 end
@@ -1381,6 +1439,11 @@ local StudioPanel = react.RegisterRecipe("UtgStudioPanel", function(params)
 	local okF, finishGen, finishTrees = pcall(finishingGenerator)
 	local hasFinish = okF and finishGen ~= nil
 	local hasTrees = hasFinish and finishTrees == true
+	-- the climate's profile (Temperate's for a climate climate.lua does not know) and whether it knows the climate: the
+	-- Terrain and Overall height tooltips (climateKey) and the climate note
+	local okP, prof, known = pcall(climateProfile)
+	if not okP then prof, known = nil, false end
+	local climateKey = prof and prof.key or "temperate"
 
 	-- Generator choice: this mod's own first, then the game's generators of this climate (vanilla and mods)
 	local function generatorRow()
@@ -1460,9 +1523,9 @@ local StudioPanel = react.RegisterRecipe("UtgStudioPanel", function(params)
 				end)),
 				-- labelled "Terrain" since 2026-10-12 (owner, REVIEW B12: the game's own heading for these settings);
 				-- internally still relief (settings key, pipeline.RELIEF, the settings line in the log; the Report shows it
-				-- as "terrain", settingsText)
+				-- as "terrain", settingsText); its tooltip names this climate's snow or rock line (TERRAIN_TIPS)
 				field("Terrain", combo(RELIEF, st.relief, function(v) st.relief = v; changed() end),
-					T("Hilly is the middle step. Gentle gives the most flat land, higher is steeper. Snow from about 330 m: Alpine's peaks reach it from Gentle, the highest hills of most other map types from Hilly.")),
+					T(TERRAIN_TIPS[climateKey] or TERRAIN_TIPS.temperate)),
 			})
 			items[#items + 1] = help(typeInfo.description or "", "utg-desc")
 			items[#items + 1] = fieldRow({
@@ -1513,15 +1576,25 @@ local StudioPanel = react.RegisterRecipe("UtgStudioPanel", function(params)
 			end
 			items[#items + 1] = seedRow()
 			items[#items + 1] = keepRow()
-			-- climates without a finishing pass yet (core/climate.lua): say what Apply gives and which map types suit
-			local okP, prof = pcall(function() return climates.profile(api.res.getBaseConfig().climate) end)
-			if okP and prof and not prof.finished then
+			-- The climate note follows the finishing pass, not climate.lua's `finished` (revision 4, owner 2026-10-14): no
+			-- pass (one that failed to load, or a climate another mod adds): Apply gives the terrain shape only; a pass on a
+			-- climate whose map types are not its own yet (`finished` false: Subarctic, Tropical, Dry): the map types are
+			-- Temperate's; Temperate with its pass: no note. Either note names the climate and the map types that suit
+			-- (climate.lua fits), so only for a climate climate.lua knows; one it does not know (another mod's) has no name
+			-- or fits there, and without a pass it gets the plain note (review 2026-10-14; also when the profile could not
+			-- be read: the plain note needs none).
+			if not known and not hasFinish then
+				items[#items + 1] = help("This climate gets the terrain shape only (no forests or biomes).", "utg-note")
+			elseif prof and known and (not hasFinish or not prof.finished) then
 				local fit = {}
 				for _, id in ipairs(prof.fits) do
 					if shapes.TYPES[id] then fit[#fit + 1] = T(shapes.TYPES[id].label or id) end
 				end
-				items[#items + 1] = help(string.format("%s %s. %s %s", T("Climate:"), T(prof.label),
-					T("Gets the terrain shape only for now (no forests or biomes). Best map types:"),
+				local body = T("Gets the terrain shape only (no forests or biomes). Best map types:")
+				if hasFinish then
+					body = T("The map types are made for Temperate; map types for this climate come later. Suits best:")
+				end
+				items[#items + 1] = help(string.format("%s %s. %s %s", T("Climate:"), T(prof.label), body,
 					table.concat(fit, ", ")), "utg-note")
 			end
 		else
@@ -1570,7 +1643,10 @@ local StudioPanel = react.RegisterRecipe("UtgStudioPanel", function(params)
 			local maxPct = math.floor(e.max * 100)
 			-- the slider's tooltip on its name and on the slider itself (REVIEW B2; the base game puts tooltips on sliders
 			-- too: gui/music_player/music_player.tl)
-			local tip = TUNE_TIPS[key] and T(TUNE_TIPS[key]) or nil
+			-- (Overall height's depends on the climate: HEIGHT_TIPS)
+			local tipText = TUNE_TIPS[key]
+			if key == "height" then tipText = HEIGHT_TIPS[climateKey] or HEIGHT_TIPS.temperate end
+			local tip = tipText and T(tipText) or nil
 			items[#items + 1] = styled("utg-field", H, {
 				label(TUNE_LABELS[key] or key, "utg-label-wide", tip),
 				builtin.Slider{ meta = { class = "utg-slider", tooltip = tip }, min = 0, max = maxPct, step = 5, pageStep = 25,
@@ -1639,7 +1715,7 @@ local StudioPanel = react.RegisterRecipe("UtgStudioPanel", function(params)
 	local function kind(step) return nextStep == step and "primary" or "secondary" end
 	local applyTip = T("Wait for the current work to finish.")
 	if applyNow and isUtg and not hasFinish then
-		applyTip = T("Puts the generated heights on your map (this climate gets no forests or biomes yet).")
+		applyTip = T("Puts the generated heights on your map (this climate gets no forests or biomes).")
 	elseif applyNow then
 		applyTip = T("Puts the previewed map on your map. Forests and biomes are added now; the preview shows the land only.")
 	elseif canApply then
@@ -1747,7 +1823,6 @@ local StudioPanel = react.RegisterRecipe("UtgStudioPanel", function(params)
 	else
 		-- after the window was closed, the finished preview is kept for Apply but not run again until Preview
 		preview = help(S.ready ~= nil and "The previewed map is still ready for Apply. Press Preview to see it again."
-			or isUtg and "The map appears here after Preview."
 			or "The map appears here after Preview.", "utg-preview-empty")
 	end
 	local right = styled("utg-right", V, {

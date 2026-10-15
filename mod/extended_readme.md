@@ -12,20 +12,21 @@ little with the seed, and larger maps have more and longer rivers. Words used th
 - **Very steep:** slope over 25 % (the street tool stops at 20 %).
 - **Tops:** the height that only 1 % of the land rises above (the Report's "99 %"): about the height of the highest
   hills.
-- **Snow:** on Temperate maps snow starts at about 330 m.
+- **Snow:** about 330 m on Temperate, about 210 m on Subarctic; Dry and Tropical have none (Tropical shows bare rock
+  from about 210 m). Everything this guide says about snow is for Temperate (section 3, "Climates").
 - For comparison, a map from the game's own Temperate generator has about 11 % flat land, 39 % of its land under
   8.5 % and tops of about 330 m.
 
 ## 1. Make your first map
-1. In the main menu choose **Map Editor** > **Create New Map**. Pick **Temperate** and a size of **Small** or larger,
-   add this mod on the **Add Mods** tab, then **Start Map Editor**.
+1. In the main menu choose **Map Editor** > **Create New Map**. Pick a climate (Temperate, Dry, Subarctic or
+   Tropical) and a size of **Small** or larger, add this mod on the **Add Mods** tab, then **Start Map Editor**.
 2. In the editor, click **UTG** in the top-left corner of the screen, next to the map layers button. The window opens:
    settings on the left, the preview on the right.
 3. On the **Settings** tab keep Map type **Great River Valley** and set **Terrain** to **Gentle** (the most flat land).
 4. Press **Preview**. After some seconds the map appears; your own map has not changed yet.
 5. Open the **Report** tab: how much flat land, how many rivers, how long the ship river is (section 7).
 6. Not quite right? Press **New seed** for another map with the same settings, or change a setting, then Preview again.
-7. Press **Apply to map**. The new terrain goes in with forests, rock and ground textures. Towns and industries
+7. Press **Apply to map**. The new terrain goes in with the climate's trees, rocks and ground. Towns and industries
    already there are removed unless **Keep towns** / **Keep industries** is ticked. Not happy? **Undo**.
 8. Add towns and industries with the editor's **Towns / Industries** button, then save the map. To play it: main menu
    > **New Game**, choose your map, **Play Map**.
@@ -44,7 +45,7 @@ a bigger window and back; the window can be moved.
 - The picture shows the land coloured by height and ground: blue water, greens and browns low down, light colours
   high up. Trees are never drawn in it.
 
-**Apply to map** puts the previewed map onto your map, now with forests, rock and ground textures (Temperate).
+**Apply to map** puts the previewed map onto your map, now with your climate's own trees, rocks and ground textures.
 - If you changed a setting since the last Preview, or have not previewed yet, it makes the preview first and then
   applies it ("Making the preview, then applying..."). Your map always gets what the settings show.
 - Changing a setting while it waits cancels it ("nothing applied"), and so does closing the window: press Apply to
@@ -56,8 +57,8 @@ a bigger window and back; the window can be moved.
 **Undo** puts back the terrain from before the last Apply (one step). It restores the shape of the land only: not
 its trees, and not towns or industries that Apply removed.
 
-**Lower tree density** (Settings tab) gives about half as many trees in exactly the same forests. Changing only this
-box makes the next Preview quick, because the terrain is not made again.
+**Lower tree density** (Settings tab, Temperate maps for now) gives about half as many trees in exactly the same
+forests. Changing only this box makes the next Preview quick, because the terrain is not made again.
 
 **Closing the window** keeps a finished preview ready for Apply; press Preview to see it again.
 
@@ -125,6 +126,23 @@ type. In brackets: the name of its side box (which edge gets the main feature, s
 
 Alpine has 97 % land with its pre-selected Sea side None, 91 % with a sea. Mountain Range, Highland Plateau and every
 other type were measured with their sea.
+
+### Climates
+The map types are made for Temperate, and they work in all four climates. The land is the same in each: the same
+settings, seed and map size give the same heights, rivers and lakes on Temperate, Dry, Subarctic and Tropical. The
+climate decides how the land is finished: its own trees, rocks and ground, and the heights where snow and bare rock
+begin. The numbers and tables in this guide were measured on Temperate; only snow and bare rock differ elsewhere.
+- **Temperate:** rock from about 280 m, snow from about 330 m.
+- **Subarctic:** rock from about 130 m, snow from about 210 m, much lower than on Temperate. Alpine, Mountain Range
+  and Highland Plateau reach the snow from Gentle, most other map types from Moderate; Island Chain and Rolling Plains
+  only a few peaks from Rugged; Delta Lowlands hardly ever (at most a spot at Mountainous). These steps are for the
+  sliders at 100 %.
+- **Tropical:** no snow, but bare rock from about 210 m: the same map types reach it at the same Terrain steps as
+  Subarctic's snow.
+- **Dry:** no snow. Shrubs, cacti and desert rocks instead of forests.
+
+On Dry, Subarctic and Tropical the Settings tab names the map types that suit the climate best. Map types made for
+these climates are planned.
 
 ## 4. Settings tab, control by control
 
@@ -213,7 +231,7 @@ appear. Coast roughness then shows "-".
 ### Trees: Lower tree density (Temperate, this mod's generator)
 Ticked, the finished map gets about half as many trees. The forests stay exactly where they are, with the same forest
 floor; only the number of trees in them drops. For slower computers. Not a terrain setting: the land is the same
-either way.
+either way. On Dry, Subarctic and Tropical maps the box is not shown yet.
 
 ### Seed and New seed
 Any text. The same settings, the same seed and the same map size give the same map; the same seed on another map size
@@ -224,8 +242,8 @@ Section 2. Both are unticked at first.
 
 ### Map size and notes
 The tab shows your map's size (set when you create the map in the editor). Under about 6 km across it notes that the
-map gets few or no rivers. On Dry, Subarctic and Tropical maps it notes that Apply gives the terrain shape only and
-names the map types that suit that climate.
+map gets few or no rivers. On Dry, Subarctic and Tropical maps it notes that the map types are made for Temperate and
+names the ones that suit that climate best (section 3, "Climates").
 
 ## 5. Terrain parameters tab, slider by slider
 Ten sliders fine-tune the map. Each one multiplies what the map type is designed to have at the chosen Terrain step:
@@ -454,7 +472,7 @@ The numbers are for Great River Valley at Hilly (flat land 24 %, 42 % under 8.5 
 
 ## 6. Terrain steps at a glance
 Each step from Gentle to Mountainous changes the heights, the flat land, the pass grades and the snow evenly; the
-layout, the rivers and the lakes stay the same.
+layout, the rivers and the lakes stay the same. The snow rows are for Temperate (section 3, "Climates").
 
 | Terrain | Gentle | Moderate | Hilly | Rugged | Mountainous |
 |---|---|---|---|---|---|
@@ -474,8 +492,8 @@ layout, the rivers and the lakes stay the same.
   A railway can be built up to 8.5 %, so every step stays passable. The pass summits are low saddles (the highest
   about 60 m at Gentle, 140 m at Mountainous), while the mountains around them reach 300-880 m.
 - Hill country covers 50 % of the land at Gentle, 55 % at Moderate and 60 % from Hilly up.
-- With the sliders at 100 %, Rolling Plains and Delta Lowlands stay below the snow at every step. Island Chain and
-  narrow peninsulas stay lower than other types: their height is limited by the distance to the coast.
+- With the sliders at 100 %, Rolling Plains and Delta Lowlands stay below Temperate's snow at every step. Island
+  Chain and narrow peninsulas stay lower than other types: their height is limited by the distance to the coast.
 
 ## 7. Report tab, line by line
 After a Preview the Report describes the map you are looking at. An example (Great River Valley, Medium map):
@@ -512,7 +530,8 @@ strait: 1 narrows (364 m across at the water line), narrowest crossing 364 m; sh
   river, River bends up, Hill country down, or a lower Terrain step. *More railway land:* Hill country or Hill height
   down, Overall height down. *Less very steep land:* Erosion down, Hill height down, a lower Terrain step.
 - **land height:** the median (half the land is lower), 99 % (the tops) and max (the highest point). A 99 % above
-  about 330 m means snowy tops. *Higher or lower:* Overall height, or the Terrain step.
+  about 330 m means snowy tops on Temperate (about 210 m on Subarctic). *Higher or lower:* Overall height, or the
+  Terrain step.
 - **rivers N (+M delta channels), X km:** the rivers and their tributaries, each counted once, with delta channels
   counted apart, and their total length. *More:* Water Wet, Rivers above 100 %. *Fewer:* Water Dry, Rivers lower.
 - **ship rivers N, X km (P % of their course >= 2 m deep):** the rivers ships can use, the length of their ship
@@ -575,11 +594,12 @@ or Apply to map, which makes the new preview first.
 **Apply says "nothing applied".** A setting changed while Apply waited for its preview, or the preview failed or did
 not finish (the status line says which). Press Apply to map again.
 
-**My Dry, Subarctic or Tropical map has no forests, and the preview stays empty.** Only Temperate is finished. On the
-other climates Preview makes the terrain and its Report but shows no picture yet, and Apply puts the terrain shape on
-the map without forests. The window names the map types that suit the climate best.
+**My Subarctic map is very snowy, and my Dry or Tropical map has no snow.** The map types have the same heights in
+every climate, and each climate draws snow at its own height: about 330 m on Temperate, about 210 m on Subarctic, none
+on Dry and Tropical (Tropical shows bare rock from about 210 m instead). For less snow on Subarctic, choose a lower
+Terrain step or Overall height; for snowy tops on most map types, Moderate or higher (section 3, "Climates").
 
-**The game is slow with all the trees.** Tick Lower tree density and Preview or Apply again.
+**The game is slow with all the trees.** On Temperate, tick Lower tree density and Preview or Apply again.
 
 **I want Keep Heightmap or Keep Assets with one of the game's generators.** This window does not offer them: use the
 game's own Generate tab for that.
@@ -590,23 +610,26 @@ lists them.
 **The buttons stay greyed out.** They wait while a map is made or applied. If the game never answers, they work again
 after about a minute and a half, and the status line says what happened.
 
-**What are the `utg_placeholder` files?** The tool needs them to add the forests and keeps them in the game's
-`heightmaps` and `biomes` folders in the user data folder. They are safe to delete; the tool writes them again.
+**What are the `utg_placeholder` files?** The tool needs them to finish the map (trees, rocks and ground) and keeps
+them in the game's `heightmaps` and `biomes` folders in the user data folder. They are safe to delete; the tool writes
+them again.
 
 **How do I report a problem?** Please post on the mod page what you saw (a screenshot helps), the map size and the
 Report's "For:" line. For files, turn on **Debug tools** in this mod's settings (on the Mods tab where you add the
 mod, before the map editor starts). The window then shows a Debug row; its files go into the game's `heightmaps`
 folder in the user data folder (Run test also writes into `biomes`):
-- **Run test** (this mod's generator, Temperate): one click for a preview, Apply, the finished map exported and the
-  log saved, everything a bug report needs. It replaces your terrain and removes towns and industries unless kept, so
-  use a spare map.
+- **Run test** (this mod's generator, any of the four climates): one click for a preview, Apply, the finished map
+  exported and the log saved, everything a bug report needs. It replaces your terrain and removes towns and
+  industries unless kept, so use a spare map.
 - **Save log:** everything the tool logged this session; the status line names the file.
 - **Export** saves the current terrain as a heightmap image; **Test set** makes a fixed set of maps without touching
   yours (several minutes), for comparing versions.
 
 ## 9. Limits
 - **Map editor only.** Save the map and start a game from it: main menu > New Game, choose the map, Play Map.
-- **Temperate only, for now.** Dry, Subarctic and Tropical get the terrain shape only; their forests are planned.
+- **Map types made for Temperate.** On Dry, Subarctic and Tropical they keep their shape and get that climate's own
+  trees, rocks and ground; snow and bare rock begin at that climate's own heights (section 3, "Climates"). Map types
+  made for those climates are planned. Lower tree density is on Temperate only, for now.
 - **All water is at sea level.** The game has one water level for the whole map, so there are no lakes up in the
   hills and no waterfalls; rivers run in low valleys.
 - **Undo** is one step and restores the shape of the land only.

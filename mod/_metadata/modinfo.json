@@ -5,7 +5,7 @@
             "role": "CREATOR"
         }
     ],
-    "description": "Map editor tool with its own window: build whole maps from the rivers up (ship rivers, lakes, eroded hills and mountains, twelve map types) or run any other terrain generator of your climate, with preview only when you ask. Full maps with forests for Temperate; other climates get the terrain shape.",
+    "description": "Map editor tool with its own window: build whole maps from the rivers up (ship rivers, lakes, eroded hills and mountains, twelve map types) or run any other terrain generator of your climate, with preview only when you ask. Finished maps in all four climates, with each climate's own trees, rocks and ground.",
     "name": "Ultimate Terrain Generator",
     "summary": "Map editor window: rivers-first terrain, twelve map types, any generator, preview on request.",
     "tags": [

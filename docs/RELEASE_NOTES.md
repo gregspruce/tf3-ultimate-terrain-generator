@@ -8,6 +8,13 @@ mod.io gets the new description, summary and cover). The full player-facing list
 mod.io version label: always "1.0" (the game's upload form has no version setting), so each changelog text starts
 with the update's name.
 
+## Revision 4 (update of revision 3; mod.io 6433560)
+Paste into the Changelog field:
+
+```
+Update 4: All climates: the twelve map types now make finished maps on Dry, Subarctic and Tropical too, with each climate's own trees, rocks and ground (until now these climates got the terrain shape only), and Preview now shows the map in all four climates. Each climate draws snow at its own height: about 330 m on Temperate, about 210 m on Subarctic (snowy tops on most map types from Terrain Moderate), none on Dry and Tropical (Tropical shows bare rock from about 210 m instead). Lower tree density stays on Temperate for now. Run test (Debug tools) now works in all four climates, and the guide explains what each climate shows. Known issue: on Dry, all low land up to about 12 m (such as Great River Valley's valley floor and most of Delta Lowlands) is bright red sand, and farms find little land there; the next update tunes Dry's ground together with map types made for Dry, Subarctic and Tropical.
+```
+
 ## Revision 3 (update of revision 2; mod.io 6433560)
 Paste into the Changelog field:
 
